@@ -1,0 +1,47 @@
+{
+  "city_configs": {
+    "460100_海口市": {
+      "capacity_mw": 22.29,
+      "turbines": [
+        {
+          "model": "2MW机组",
+          "count": 4,
+          "rated_power_mw": 2.0,
+          "hub_height_m": 100.0,
+          "cut_in_m_s": 3.0,
+          "rated_m_s": 10.5,
+          "cut_out_m_s": 25.0,
+          "efficiency": 0.92,
+          "wind_shear_exponent": 0.15
+        },
+        {
+          "model": "6MW机组",
+          "count": 3,
+          "rated_power_mw": 6.0,
+          "hub_height_m": 140.0,
+          "cut_in_m_s": 3.0,
+          "rated_m_s": 11.0,
+          "cut_out_m_s": 25.0,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    "460200_三亚市": {
+      "capacity_mw": 18.575,
+      "turbines": [
+        {
+          "model": "12MW机组",
+          "count": 1,
+          "rated_power_mw": 12.0,
+          "hub_height_m": 160.0,
+          "cut_in_m_s": 3.0,
+          "rated_m_s": 11.5,
+          "cut_out_m_s": 25.0,
+          "efficiency": 0.95,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    }
+  }
+}

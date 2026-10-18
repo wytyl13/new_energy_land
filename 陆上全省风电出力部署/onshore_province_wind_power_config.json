@@ -1,0 +1,27 @@
+{
+  "input": {"project_root": "c:/Users/weiyutao/20260823/new_energy_land/data", "assignment_file": "海南地市分区/海南共同80格点_地市归属.csv", "weather_grid_dir": "hainan_era5_grid_csv", "scene_root": "海南海口市三类风速场景_地市独立生成_严格边界_2000_2024训练_2025目标_全局分位数50%校正版"},
+  "scenario": {"year": 2024, "resource_year_type": "正常资源年", "generate_wind_scenario": true},
+  "loss_factor": 1.0,
+  "city_configs": {
+    "460100_海口市": {"capacity_mw": 22.29, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]},
+    "460200_三亚市": {"capacity_mw": 18.575, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]},
+    "460400_儋州市": {"capacity_mw": 37.15, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]},
+    "469001_五指山市": {"capacity_mw": 1.8575, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]},
+    "469002_琼海市": {"capacity_mw": 14.86, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]},
+    "469005_文昌市": {"capacity_mw": 59.44, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]},
+    "469006_万宁市": {"capacity_mw": 52.01, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]},
+    "469007_东方市": {"capacity_mw": 44.58, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]},
+    "469021_定安县": {"capacity_mw": 3.715, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]},
+    "469022_屯昌县": {"capacity_mw": 1.8575, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]},
+    "469023_澄迈县": {"capacity_mw": 11.145, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]},
+    "469024_临高县": {"capacity_mw": 29.72, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]},
+    "469025_白沙黎族自治县": {"capacity_mw": 3.715, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]},
+    "469026_昌江黎族自治县": {"capacity_mw": 29.72, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]},
+    "469027_乐东黎族自治县": {"capacity_mw": 26.005, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]},
+    "469028_陵水黎族自治县": {"capacity_mw": 14.86, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]},
+    "469029_保亭黎族苗族自治县": {"capacity_mw": 1.8575, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]},
+    "469030_琼中黎族苗族自治县": {"capacity_mw": 1.8575, "turbines": [{"model": "6MW机组", "count": 1, "rated_power_mw": 6, "hub_height_m": 140, "cut_in_m_s": 3, "rated_m_s": 11, "cut_out_m_s": 25, "efficiency": 0.94, "wind_shear_exponent": 0.15}]}
+  },
+  "output_city_power": true,
+  "output_dir": "c:/Users/weiyutao/20260823/new_energy_land/陆上全省风电出力部署/输出"
+}

@@ -1,0 +1,310 @@
+{
+  "city_configs": [
+    {
+      "city": "460100_海口市",
+      "capacity_mw": 22.29,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    {
+      "city": "460200_三亚市",
+      "capacity_mw": 18.575,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    {
+      "city": "460400_儋州市",
+      "capacity_mw": 37.15,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    {
+      "city": "469001_五指山市",
+      "capacity_mw": 1.8575,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    {
+      "city": "469002_琼海市",
+      "capacity_mw": 14.86,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    {
+      "city": "469005_文昌市",
+      "capacity_mw": 59.44,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    {
+      "city": "469006_万宁市",
+      "capacity_mw": 52.01,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    {
+      "city": "469007_东方市",
+      "capacity_mw": 44.58,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    {
+      "city": "469021_定安县",
+      "capacity_mw": 3.715,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    {
+      "city": "469022_屯昌县",
+      "capacity_mw": 1.8575,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    {
+      "city": "469023_澄迈县",
+      "capacity_mw": 11.145,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    {
+      "city": "469024_临高县",
+      "capacity_mw": 29.72,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    {
+      "city": "469025_白沙黎族自治县",
+      "capacity_mw": 3.715,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    {
+      "city": "469026_昌江黎族自治县",
+      "capacity_mw": 29.72,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    {
+      "city": "469027_乐东黎族自治县",
+      "capacity_mw": 26.005,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    {
+      "city": "469028_陵水黎族自治县",
+      "capacity_mw": 14.86,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    {
+      "city": "469029_保亭黎族苗族自治县",
+      "capacity_mw": 1.8575,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    },
+    {
+      "city": "469030_琼中黎族苗族自治县",
+      "capacity_mw": 1.8575,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    }
+  ]
+}

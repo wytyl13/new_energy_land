@@ -1,0 +1,6 @@
+1b1bc563fd452eea197bc972b7bd2f94 *scenario/BASE_偏大资源年_辐照度场景.csv
+dae7c425d68b9a39be204e38e859fdcf *scenario/BASE_偏小资源年_辐照度场景.csv
+28e9fc1036b92dd4a6d1ff6faf3fe157 *scenario/BASE_正常资源年_辐照度场景.csv
+fe926b3d5207daae0536754cae14756c *power/BASE_偏大资源年_光伏出力.csv
+b42f03a073f1753658ae6f7eaec3a730 *power/BASE_偏小资源年_光伏出力.csv
+c361e65234780dee4aedc77926285d07 *power/BASE_正常资源年_光伏出力.csv

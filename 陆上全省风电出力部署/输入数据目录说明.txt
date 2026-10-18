@@ -1,0 +1,18 @@
+当前项目根目录：D:\PycharmProjects\EPPEI\05hainan
+
+部署代码需要以下输入：
+
+1. 各地市严格边界格点归属
+D:\PycharmProjects\EPPEI\05hainan\海南地市分区\海南共同80格点_地市归属.csv
+
+2. 历史地市风速，用于生成风速场景
+D:\PycharmProjects\EPPEI\05hainan\hainan_city_weather_csv_strict_inside\wind\
+
+3. 温度格点数据
+D:\PycharmProjects\EPPEI\05hainan\hainan_era5_grid_csv\temperature\
+
+4. 地表气压格点数据
+D:\PycharmProjects\EPPEI\05hainan\hainan_era5_grid_csv\pressure\
+
+
+运行前请确认历史风速覆盖2000-2025年，温度和气压覆盖配置文件中的输出年份。

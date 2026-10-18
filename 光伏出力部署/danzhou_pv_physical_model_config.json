@@ -1,0 +1,17 @@
+{
+  "city": "儋州市",
+  "loss_factor": 0.90,
+  "albedo": 0.20,
+  "cities": {
+    "460400_儋州市": {
+      "capacity_mw": 955.21,
+      "latitude": 19.56,
+      "longitude": 109.58,
+      "scenario_dir": "海南儋州市三类辐照度场景_地市独立生成_严格边界_2000_2024训练_2025目标",
+      "components": [
+    {"name": "常规组件", "capacity_share": 0.60, "tilt_deg": 18.0, "azimuth_deg": 180.0, "noct_c": 45.0, "gamma_p_per_c": -0.0040, "efficiency": 1.0},
+    {"name": "低温升高效组件", "capacity_share": 0.40, "tilt_deg": 15.0, "azimuth_deg": 180.0, "noct_c": 42.0, "gamma_p_per_c": -0.0035, "efficiency": 1.0}
+      ]
+    }
+  }
+}

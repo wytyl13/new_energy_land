@@ -1,0 +1,30 @@
+{
+  "data_dir": "c:/Users/weiyutao/20260823/new_energy_land/data/hainan_era5_grid_csv",
+  "output_dir": "c:/Users/weiyutao/20260823/new_energy_land/tests/output",
+  "scenario": {
+    "year": 2024,
+    "resource_year_type": "正常资源年"
+  },
+  "city_configs": [
+    {
+      "city": "460100_海口市",
+      "capacity_mw": 22.29,
+      "turbines": [
+        {
+          "model": "6MW机组",
+          "count": 1,
+          "rated_power_mw": 6,
+          "hub_height_m": 140,
+          "cut_in_m_s": 3,
+          "rated_m_s": 11,
+          "cut_out_m_s": 25,
+          "efficiency": 0.94,
+          "wind_shear_exponent": 0.15
+        }
+      ]
+    }
+  ],
+  "loss_factor": 1.0,
+  "output_city_power": true,
+  "evaluate": false
+}
