@@ -240,7 +240,13 @@ def run_wind(source: dict | str | Path) -> dict:
 
 def _compute(cfg: dict) -> WindResult:
     """执行风电全流程：格点风速 → 三类场景生成 → 全省出力。
-"""
+
+    Args:
+        cfg (dict): 规范化配置（_parse_request 的输出）。
+
+    Returns:
+        WindResult: 三类场景与出力表。
+    """
     grid_root = cfg["data_dir"]
     assignment_csv = cfg["assignment_file"]
     year = cfg["year"]
@@ -307,6 +313,14 @@ def _compute(cfg: dict) -> WindResult:
     target_index = pd.date_range(f"{year}-01-01", f"{year}-12-31 23:00:00", freq="h")
 
     def to_beijing_year(series: pd.Series) -> pd.Series:
+        """UTC 序列转北京时间并对齐输出年时间轴（缺失处时间插值）。
+
+        Args:
+            series (pd.Series): UTC 时间索引的序列。
+
+        Returns:
+            pd.Series: 北京时间索引、对齐 target_index 的序列。
+        """
         s = pd.Series(series.to_numpy(float), index=series.index + pd.Timedelta(hours=8), name=series.name)
         return s.reindex(target_index).interpolate(method="time", limit_direction="both")
 

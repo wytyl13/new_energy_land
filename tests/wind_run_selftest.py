@@ -40,6 +40,15 @@ results: list[tuple[str, str, float]] = []
 
 
 def _check(name: str, fn) -> None:
+    """执行一个用例并记录 PASS/FAIL 与耗时。
+
+    Args:
+        name (str): 用例名。
+        fn (Callable): 用例函数。
+
+    Returns:
+        None
+    """
     start = time.perf_counter()
     try:
         fn()
@@ -49,15 +58,37 @@ def _check(name: str, fn) -> None:
 
 
 def _rel_max(a: pd.DataFrame, b: pd.DataFrame) -> float:
+    """两表数值列的逐元素最大相对偏差。
+
+    Args:
+        a (pd.DataFrame): 基准表。
+        b (pd.DataFrame): 对照表。
+
+    Returns:
+        float: 最大相对偏差。
+    """
     num = a.select_dtypes(include=[np.number])
     return float(((num - b[num.columns]).abs() / num.abs().clip(lower=1e-12)).to_numpy().max())
 
 
 def _load_fixture(name: str) -> dict:
+    """读取 tests/fixtures 下的 JSON 请求样例。
+
+    Args:
+        name (str): 文件名。
+
+    Returns:
+        dict: 请求配置。
+    """
     return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
 def case_full_province() -> None:
+    """全省回归：18 地市出力对冻结基准（总量≤1e-6、逐元素≤1e-4），返回 JSON 结构核对。
+
+    Returns:
+        None
+    """
     response = run_wind(FIXTURES / "wind_full_province.json")  # 文件路径形态
     a = pd.read_csv(BASELINE, encoding="utf-8-sig")
     b = pd.read_csv(response["output_file"], encoding="utf-8-sig")
@@ -87,6 +118,11 @@ def case_full_province() -> None:
 
 
 def case_single_city() -> None:
+    """单市（海口）出力与全省基准的海口列一致，province 列等于本市列。
+
+    Returns:
+        None
+    """
     fixture = _load_fixture("wind_single_city.json")
     response = run_wind(fixture)  # dict 形态
     a = pd.read_csv(BASELINE, encoding="utf-8-sig")
@@ -103,6 +139,11 @@ def case_single_city() -> None:
 
 
 def case_defaults() -> None:
+    """缺省字段填服务端默认（全省 18 地市），文件与 dict 解析等价。
+
+    Returns:
+        None
+    """
     # 缺 data_dir/city_configs → 填服务端默认（不跑计算，只核对解析结果）
     cfg = _parse_request({
         "scenario": {"year": 2024, "resource_year_type": "正常资源年"},
@@ -117,9 +158,23 @@ def case_defaults() -> None:
 
 
 def case_invalid_requests() -> None:
+    """12 项非法请求与配置文件不存在均抛 ValueError 且报错指明原因。
+
+    Returns:
+        None
+    """
     base = _load_fixture("wind_single_city.json")
 
     def expect_error(mutate, needle: str) -> None:
+        """按 mutate 改动请求后期望 _parse_request 报错含 needle。
+
+        Args:
+            mutate (Callable): 对 payload 的改动函数。
+            needle (str): 期望报错包含的关键词。
+
+        Returns:
+            None
+        """
         payload = copy.deepcopy(base)
         mutate(payload)
         try:
@@ -152,6 +207,11 @@ def case_invalid_requests() -> None:
 
 
 def main() -> None:
+    """依次执行全部用例并打印结果表。
+
+    Returns:
+        None
+    """
     _check("1 全省回归（约4分钟）", case_full_province)
     _check("2 单市一致性", case_single_city)
     _check("3 默认值与解析等价", case_defaults)

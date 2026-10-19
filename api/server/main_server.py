@@ -72,7 +72,7 @@ async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse
     """算法/pipeline 抛的参数与数据类错误 → 400，message 原样透出。
 """
     logger.warning("%s %s ValueError: %s", request.method, request.url.path, exc)
-    return JSONResponse(status_code=400, content=make_response(success=False, message=str(exc), code=400))
+    return JSONResponse(status_code=400, content=make_response(success=False, message=str(exc)))
 
 
 @app.exception_handler(Exception)
@@ -96,6 +96,11 @@ app.include_router(solar_router.router)
 
 
 def main() -> None:
+    """解析命令行参数并启动 uvicorn 服务。
+
+    Returns:
+        None
+    """
     parser = argparse.ArgumentParser(description="新能源出力场景服务")
     parser.add_argument("--port", type=int, default=9998)
     parser.add_argument("--host", default="0.0.0.0")

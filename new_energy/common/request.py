@@ -33,6 +33,14 @@ RESOURCE_YEAR_TYPES = ("偏小资源年", "正常资源年", "偏大资源年")
 
 
 def fail(msg: str) -> None:
+    """抛出校验错误 ValueError。
+
+    Args:
+        msg (str): 错误信息（指明字段/文件/地市）。
+
+    Returns:
+        None
+    """
     raise ValueError(msg)
 
 
@@ -40,6 +48,12 @@ def load_payload(source: dict | str | Path) -> dict:
     """统一 JSON 来源装载：dict 原样返回；str/Path 读文件。
 
     文件不存在/坏 JSON/根不是对象 → ValueError。
+
+    Args:
+        source (dict | str | Path): 请求配置（dict 或 JSON 文件路径）。
+
+    Returns:
+        dict: 请求配置字典。
     """
     if isinstance(source, dict):
         return source
@@ -56,25 +70,59 @@ def load_payload(source: dict | str | Path) -> dict:
 
 
 def reject_unknown(payload: dict, allowed: set[str], ctx: str) -> None:
+    """存在 allowed 之外的键时抛 ValueError。
+
+    Args:
+        payload (dict): 请求对象。
+        allowed (set[str]): 允许的字段名集合。
+        ctx (str): 报错上下文（如 "scenario"）。
+
+    Returns:
+        None
+    """
     unknown = sorted(set(payload) - allowed)
     if unknown:
         fail(f"{ctx}存在未知字段: {unknown}")
 
 
 def string(value: object, name: str) -> str:
+    """校验非空字符串，不合法则抛 ValueError。
+
+    Args:
+        value (object): 待校验值。
+        name (str): 字段名（用于报错）。
+
+    Returns:
+        str: 原字符串。
+    """
     if not isinstance(value, str) or not value.strip():
         fail(f"{name} 必须是非空字符串")
     return value
 
 
 def number(value: object, name: str) -> float:
+    """校验数字（排除 bool），不合法则抛 ValueError。
+
+    Args:
+        value (object): 待校验值。
+        name (str): 字段名（用于报错）。
+
+    Returns:
+        float: 转换后的数值。
+    """
     if isinstance(value, bool) or not isinstance(value, (int, float)):
         fail(f"{name} 必须是数字")
     return float(value)
 
 
 def assignment_keys(assignment_csv: Path) -> set[str]:
-    """读归属表，返回全部合法地市键集合（行政区代码_地市名）。
-"""
+    """读归属表，返回全部合法地市键集合。
+
+    Args:
+        assignment_csv (Path): 格点归属表 CSV 路径。
+
+    Returns:
+        set[str]: 地市键集合（行政区代码_地市名）。
+    """
     table = pd.read_csv(assignment_csv, encoding=ENC)
     return {f"{int(code)}_{city}" for code, city in zip(table["city_code"], table["city"])}

@@ -15,9 +15,17 @@ from typing import Any
 from fastapi.encoders import jsonable_encoder
 
 
-def make_response(success: bool, message: str = "", data: Any = None, code: int = 200) -> dict:
-    """统一返回体 {success, message, data, timestamp}；code 为业务子码，与 HTTP 状态码分工。
-"""
+def make_response(success: bool, message: str = "", data: Any = None) -> dict:
+    """统一返回体 {success, message, data, timestamp}。
+
+    Args:
+        success (bool): 是否成功。
+        message (str): 提示或错误信息。
+        data (Any): 业务数据，经 jsonable_encoder 序列化。
+
+    Returns:
+        dict: 统一返回体。
+    """
     return {
         "success": success,
         "message": message,

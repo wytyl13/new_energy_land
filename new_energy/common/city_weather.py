@@ -35,6 +35,14 @@ KIND_PREFIX = {
 
 
 def parse_grid_name(value: str) -> tuple[float, float]:
+    """解析格点列名末尾的纬度、经度。
+
+    Args:
+        value (str): 格点列名，形如 "前缀_lat_19.00_lon_109.50"。
+
+    Returns:
+        tuple[float, float]: (纬度, 经度)。
+    """
     m = re.search(r"_lat_(-?\d+\.\d+)_lon_(-?\d+\.\d+)$", str(value))
     if not m:
         raise ValueError(f"无法解析格点名称: {value}")
@@ -47,9 +55,18 @@ def load_city_series(
     kind: str,
     years: range | list[int] | tuple[int, ...],
 ) -> dict[str, pd.Series]:
-    """读 kind 类型的逐年格点 CSV，返回 {地市键: 逐年拼接的 Series(UTC 时间索引)}。
+    """读 kind 类型的逐年格点 CSV，按地市聚合为逐年拼接的序列。
 
     grid_dir 形如 .../hainan_era5_grid_csv，函数读 grid_dir/kind/hainan_{kind}_{year}.csv。
+
+    Args:
+        grid_dir (Path): 格点数据根目录。
+        assignment_csv (Path): 格点归属表 CSV 路径。
+        kind (str): 数据类型（wind/solar/temperature/pressure）。
+        years (range | list[int] | tuple[int, ...]): 要读取的年份序列。
+
+    Returns:
+        dict[str, pd.Series]: 地市键 → 逐年拼接 Series（UTC 时间索引，严格边界内格点均值）。
     """
     prefix = KIND_PREFIX[kind]
     assignment = pd.read_csv(assignment_csv, encoding=ENC)
@@ -86,8 +103,7 @@ def load_city_series(
 
 
 class YearsPlan(NamedTuple):
-    """历史年份方案：源年份、训练年份、场景轴年份的派生关系见 resolve_years。
-"""
+    """历史年份方案：源年份、训练年份、场景轴年份的派生关系见 resolve_years。"""
 
     source_years: tuple[int, ...]  # 实际使用的历史年份（两端含）
     train_years: tuple[int, ...]   # 训练统计用 = source_years 除最后一年
@@ -95,8 +111,15 @@ class YearsPlan(NamedTuple):
 
 
 def _file_years(grid_dir: Path, kind: str) -> set[int]:
-    """扫 grid_dir/kind 下 hainan_{kind}_{年}.csv，返回实际存在的年份集合。
-"""
+    """扫数据子目录，返回实际存在的年份集合。
+
+    Args:
+        grid_dir (Path): 格点数据根目录。
+        kind (str): 数据类型（子目录名）。
+
+    Returns:
+        set[int]: hainan_{kind}_{年}.csv 对应的年份集合。
+    """
     pattern = re.compile(rf"hainan_{kind}_(\d{{4}})\.csv")
     return {
         int(match.group(1))
@@ -107,7 +130,13 @@ def _file_years(grid_dir: Path, kind: str) -> set[int]:
 
 def _row_count(path: Path) -> int:
     """数 CSV 数据行数（减去表头行）。
-"""
+
+    Args:
+        path (Path): CSV 文件路径。
+
+    Returns:
+        int: 数据行数。
+    """
     with path.open("rb") as handle:
         return sum(1 for _ in handle) - 1
 

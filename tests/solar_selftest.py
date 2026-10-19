@@ -44,6 +44,15 @@ results: list[tuple[str, str, float]] = []
 
 
 def _check(name: str, fn) -> None:
+    """执行一个用例并记录 PASS/FAIL 与耗时。
+
+    Args:
+        name (str): 用例名。
+        fn (Callable): 用例函数。
+
+    Returns:
+        None
+    """
     start = time.perf_counter()
     try:
         fn()
@@ -54,7 +63,15 @@ def _check(name: str, fn) -> None:
 
 def _assert_close(actual: np.ndarray, ref: np.ndarray, what: str) -> None:
     """容差判据：总量相对偏差 ≤1e-6，逐元素 |差| ≤ 1e-6 + 1e-4×|基准值|（覆盖基准文件 6 位小数舍入）。
-"""
+
+    Args:
+        actual (np.ndarray): 实际值数组。
+        ref (np.ndarray): 基准值数组。
+        what (str): 比对项名（用于断言消息）。
+
+    Returns:
+        None
+    """
     assert actual.shape == ref.shape, f"{what} 规模不符: 基准{ref.shape} vs 实际{actual.shape}"
     total_ref = float(np.abs(ref).sum())
     total_rel = float(np.abs(actual.sum() - ref.sum()) / max(total_ref, 1e-12))
@@ -64,6 +81,11 @@ def _assert_close(actual: np.ndarray, ref: np.ndarray, what: str) -> None:
 
 
 def case_full_regression() -> None:
+    """儋州三景全量回归（场景+出力对冻结基准），并核对公共入口双份返回。
+
+    Returns:
+        None
+    """
     # 内部三景全量比对（场景 + 出力，与冻结基准一致）
     result = _compute(_parse_request(CONFIG))
     for case in CASES:
@@ -95,6 +117,11 @@ def case_full_regression() -> None:
 
 
 def case_defaults() -> None:
+    """缺省字段填服务端默认（儋州区域），文件与 dict 解析等价。
+
+    Returns:
+        None
+    """
     # 缺 data_dir/city_configs → 填服务端默认（儋州区域），不跑计算
     cfg = _parse_request({
         "scenario": {"year": 2025, "resource_year_type": "正常资源年"},
@@ -108,7 +135,22 @@ def case_defaults() -> None:
 
 
 def case_invalid_requests() -> None:
+    """12 项非法请求均抛 ValueError 且报错指明问题字段。
+
+    Returns:
+        None
+    """
+
     def expect_error(mutate, needle: str) -> None:
+        """按 mutate 改动请求后期望 _parse_request 报错含 needle。
+
+        Args:
+            mutate (Callable): 对 payload 的改动函数。
+            needle (str): 期望报错包含的关键词。
+
+        Returns:
+            None
+        """
         payload = copy.deepcopy(CONFIG)
         mutate(payload)
         try:
@@ -133,6 +175,11 @@ def case_invalid_requests() -> None:
 
 
 def main() -> None:
+    """依次执行全部用例并打印结果表。
+
+    Returns:
+        None
+    """
     _check("1 全流程回归（儋州，约1分钟）", case_full_regression)
     _check("2 默认值与解析等价", case_defaults)
     _check("3 非法请求校验", case_invalid_requests)

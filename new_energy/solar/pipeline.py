@@ -256,7 +256,13 @@ def run_solar(source: dict | str | Path) -> dict:
 
 def _compute(cfg: dict) -> SolarResult:
     """执行光伏全流程：格点辐照度 → 三类场景生成 → 区域出力。
-"""
+
+    Args:
+        cfg (dict): 规范化配置（_parse_request 的输出）。
+
+    Returns:
+        SolarResult: 三类场景与出力表。
+    """
     grid_root = cfg["data_dir"]
     assignment_csv = cfg["assignment_file"]
     year = cfg["year"]

@@ -87,6 +87,14 @@ def fit_base(history: pd.Series, target_index: pd.DatetimeIndex) -> tuple[np.nda
     model.fit(scaler.transform(x_all[chosen]), y_all[chosen])
 
     def predict(index: pd.DatetimeIndex) -> np.ndarray:
+        """对给定时间轴分段预测（每段 3000 点防内存峰值）。
+
+        Args:
+            index (pd.DatetimeIndex): 时间轴。
+
+        Returns:
+            np.ndarray: 预测值数组。
+        """
         x = scaler.transform(time_features(index))
         return np.concatenate([model.predict(x[pos : pos + 3000]) for pos in range(0, len(x), 3000)])
 
