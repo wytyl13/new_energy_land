@@ -1,5 +1,11 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""步3：低辐照事件库与标准。
+"""
+@Time    : 2026/10/18 19:35
+@Author  : weiyutao
+@File    : events.py
+
+步3：低辐照事件库与标准。
 
 核心日照时段（理想辐照度超过阈值）内识别晴空指数 Kt ≤ P10 且持续 ≥3 小时的
 低辐照事件；统计分资源年、分月份的年均发生次数，作为场景生成的插入标准。
@@ -9,7 +15,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from .classify import CASE_NAMES
+from ..common.request import RESOURCE_YEAR_TYPES
 
 EVENT_IDEAL_THRESHOLD = 200.0  # 核心日照时段阈值：仅理想辐照度超过该值时识别事件（W/m2）
 KT_QUANTILE = 0.10            # 晴空指数分位阈值
@@ -98,7 +104,7 @@ def build_event_standards(
         pd.DataFrame: 年景类型 × 12 个月一行，含年均事件次数与年均持续小时。
     """
     rows = []
-    for case in CASE_NAMES:
+    for case in RESOURCE_YEAR_TYPES:
         years = classes.loc[classes.year.isin(train_years) & classes["资源年类型"].eq(case), "year"].astype(int).tolist()
         for month in range(1, 13):
             block = events.loc[events["年景类型"].eq(case) & events["月份"].eq(month)]

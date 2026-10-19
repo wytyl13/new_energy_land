@@ -1,0 +1,49 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "风电: 单市海口(约20秒)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "new_energy.wind.run_wind",
+      "args": ["tests/fixtures/wind_single_city.json"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+    {
+      "name": "风电: 最简全默认",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "new_energy.wind.run_wind",
+      "args": ["tests/fixtures/wind_minimal.json"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
+
+    // ============ 通用模板：要加新启动项，复制下面任意一段改 name/module(program)/args ============
+
+    // 方式一：模块启动，等价于 python -m new_energy.solar.run_solar xxx.json
+    // 适用：包内模块（代码里有 from .xxx import 相对导入时必须用这种）
+    {
+      "name": "模板: 模块启动(python -m)",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "new_energy.solar.run_solar",          // 改成要跑的包路径
+      "args": ["tests/fixtures/solar_danzhou.json"],   // 命令行参数，一个参数一个元素
+      "cwd": "${workspaceFolder}",                     // module 方式必须保持仓库根
+      "console": "integratedTerminal"
+    },
+
+    // 方式二：文件启动，等价于 python scripts/xxx.py 参数
+    // 适用：无包结构的独立脚本（脚本内不能有相对导入，否则报 ImportError）
+    {
+      "name": "模板: 文件启动(python 文件.py)",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/scripts/xxx.py",  // 改成脚本的实际路径
+      "args": ["--input", "data/xxx.csv"],             // 没有参数就写 []
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    }
+  ]
+}

@@ -1,5 +1,11 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""FastAPI 服务装配：lifespan、跨域、请求日志、健康检查、异常映射、路由注册。
+"""
+@Time    : 2026/10/18 19:35
+@Author  : weiyutao
+@File    : main_server.py
+
+FastAPI 服务装配：lifespan、跨域、请求日志、健康检查、异常映射、路由注册。
 
 启动（仓库根目录，conda 环境）:
     python -m api.server.main_server [--port 9998]
@@ -56,20 +62,23 @@ async def log_requests(request: Request, call_next):
 
 @app.get("/api/health")
 async def health() -> dict:
-    """【健康检查】无参纯读。"""
+    """【健康检查】无参纯读。
+"""
     return {"status": "ok", "message": "服务正常", "timestamp": datetime.now().isoformat()}
 
 
 @app.exception_handler(ValueError)
 async def value_error_handler(request: Request, exc: ValueError) -> JSONResponse:
-    """算法/pipeline 抛的参数与数据类错误 → 400，message 原样透出。"""
+    """算法/pipeline 抛的参数与数据类错误 → 400，message 原样透出。
+"""
     logger.warning("%s %s ValueError: %s", request.method, request.url.path, exc)
     return JSONResponse(status_code=400, content=make_response(success=False, message=str(exc), code=400))
 
 
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception) -> JSONResponse:
-    """未捕获异常 → 500；堆栈只进日志，不进 message。"""
+    """未捕获异常 → 500；堆栈只进日志，不进 message。
+"""
     logger.exception("%s %s 未捕获异常", request.method, request.url.path)
     return JSONResponse(
         status_code=500,

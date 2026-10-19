@@ -1,5 +1,11 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""步1：地市辐照度历史构建（UTC+8 对齐、删闰日）与地市代表性经纬度。
+"""
+@Time    : 2026/10/18 19:35
+@Author  : weiyutao
+@File    : history.py
+
+步1：地市辐照度历史构建（UTC+8 对齐、删闰日）与地市代表性经纬度。
 
 时间轴工具（year_index / no_feb29 / beijing_aligned）在 common.time_axis，
 格点读取在 common.city_weather，风电/光伏共用。
@@ -10,13 +16,13 @@ from pathlib import Path
 
 import pandas as pd
 
-from ..common.city_weather import ENC
+from ..common.request import ENC
 from ..common.time_axis import beijing_aligned
 
 
 def build_history(
     city_solar: pd.Series,
-    source_years: tuple[int, ...] = tuple(range(2000, 2026)),
+    source_years: tuple[int, ...],
 ) -> pd.Series:
     """把格点辐照度序列对齐到连续小时时间轴并删闰日。
 

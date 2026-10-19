@@ -1,5 +1,11 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""光伏全流程组织：原始格点数据 → 三类辐照度场景 → 区域出力，中间结果全部在内存。
+"""
+@Time    : 2026/10/18 19:35
+@Author  : weiyutao
+@File    : pipeline.py
+
+光伏全流程组织：原始格点数据 → 三类辐照度场景 → 区域出力，中间结果全部在内存。
 
 run_solar 是光伏对外唯一入口：收统一 JSON（文件路径或 dict），在入口完成
 校验与默认值填充（与风电同构，公共解析件在 common.request），执行全流程后
@@ -16,10 +22,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from ..common.city_weather import load_city_series
+from ..common.city_weather import load_city_series, resolve_years
 from ..common.request import (
     DEFAULT_ASSIGNMENT,
     DEFAULT_DATA_DIR,
+    ENC,
     RESOURCE_YEAR_TYPES,
     assignment_keys,
     fail,
@@ -35,9 +42,8 @@ from .generate import build_ideal, generate_scenarios
 from .history import build_history, city_centers
 from .power import compute_power, weather_climatology
 
-SOURCE_YEARS = tuple(range(2000, 2026))
-TRAIN_YEARS = tuple(range(2000, 2025))
-TARGET_YEAR = 2025  # 场景生成固定在2025年8760小时时间轴上
+# 历史年份不再写死：按数据目录实际内容解析（期望窗口见 common.request.DEFAULT_YEARS，
+# 解析规则见 common.city_weather.resolve_years），训练年 = 除最后一年，场景轴年 = 最后一年。
 
 # 服务端默认：儋州区域机组配置（全省光伏装机数据到位后升级）
 DEFAULT_CITY_CONFIGS = Path(__file__).resolve().parent / "default_city_configs.json"
@@ -51,14 +57,14 @@ COMPONENT_FIELDS = {
     "name", "capacity_share", "tilt_deg", "azimuth_deg", "noct_c", "gamma_p_per_c", "efficiency",
 }
 COMPONENT_REQUIRED = ("name", "capacity_share", "tilt_deg", "azimuth_deg", "noct_c", "gamma_p_per_c")
-ENC = "utf-8-sig"
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class SolarResult:
-    """光伏全流程输出结果：三类场景、区域出力表与资源年分类。"""
+    """光伏全流程输出结果：三类场景、区域出力表与资源年分类。
+"""
 
     scenarios: dict[str, dict[str, pd.Series]]      # case → 地市键 → 输出年份时间轴的场景
     power: dict[str, pd.DataFrame]                   # case → 区域出力表
@@ -249,7 +255,8 @@ def run_solar(source: dict | str | Path) -> dict:
 
 
 def _compute(cfg: dict) -> SolarResult:
-    """执行光伏全流程：格点辐照度 → 三类场景生成 → 区域出力。"""
+    """执行光伏全流程：格点辐照度 → 三类场景生成 → 区域出力。
+"""
     grid_root = cfg["data_dir"]
     assignment_csv = cfg["assignment_file"]
     year = cfg["year"]
@@ -259,8 +266,12 @@ def _compute(cfg: dict) -> SolarResult:
     output_city_power = cfg["output_city_power"]
 
     # 步1：格点 → 各地市辐照度历史（一次读入，全部地市同时聚合）
-    logger.info("[1/4] 读取辐照度格点并聚合到地市 (%d-%d年)...", SOURCE_YEARS[0], SOURCE_YEARS[-1])
-    solar_by_city = load_city_series(grid_root, assignment_csv, "solar", SOURCE_YEARS)
+    # 历史年份按数据目录实际内容解析：期望窗口 ∩ 实际存在的年份
+    # （辐照度与温度取交集——温度按训练年求气候平均，两者必须同年份可用）
+    years = resolve_years(grid_root, ("solar", "temperature"))
+    source_years, train_years = years.source_years, years.train_years
+    logger.info("[1/4] 读取辐照度格点并聚合到地市 (%d-%d年)...", source_years[0], source_years[-1])
+    solar_by_city = load_city_series(grid_root, assignment_csv, "solar", source_years)
     # 计算范围以 city_configs 的键为准（支持单市请求），口径与风电一致
     unknown = sorted(set(city_configs) - set(solar_by_city))
     if unknown:
@@ -268,36 +279,36 @@ def _compute(cfg: dict) -> SolarResult:
     solar_by_city = {city: series for city, series in solar_by_city.items() if city in city_configs}
     centers = city_centers(assignment_csv)
 
-    target_index = year_index(TARGET_YEAR)[no_feb29(year_index(TARGET_YEAR))]
+    target_index = year_index(years.axis_year)[no_feb29(year_index(years.axis_year))]
     scenarios_target: dict[str, dict[str, pd.Series]] = {}
     classes_all: dict[str, pd.DataFrame] = {}
 
     total = len(solar_by_city)
     for i, (city, series) in enumerate(solar_by_city.items(), 1):
         logger.info("[2/4] 地市 %d/%d %s: 资源年分类→低辐照事件库→GPR场景生成开始", i, total, city)
-        history = build_history(series, SOURCE_YEARS)
+        history = build_history(series, source_years)
         latitude, longitude = centers[city]
         ideal_history = build_ideal(history, latitude, longitude)
-        # 分类用全量历史（2025 也参与归类），事件库与场景生成只用训练年
-        train_history = history.loc[history.index.year.isin(TRAIN_YEARS)]
-        train_ideal = ideal_history.loc[ideal_history.index.year.isin(TRAIN_YEARS)]
-        classes = classify_years(history, TRAIN_YEARS)
+        # 分类用全量历史（最后一年也参与归类），事件库与场景生成只用训练年
+        train_history = history.loc[history.index.year.isin(train_years)]
+        train_ideal = ideal_history.loc[ideal_history.index.year.isin(train_years)]
+        classes = classify_years(history, train_years)
         classes_all[city] = classes
-        events, segments = extract_low_irradiance_events(train_history, train_ideal, classes, TRAIN_YEARS)
-        standards = build_event_standards(events, classes, TRAIN_YEARS)
+        events, segments = extract_low_irradiance_events(train_history, train_ideal, classes, train_years)
+        standards = build_event_standards(events, classes, train_years)
         city_scenarios, _plans, phi = generate_scenarios(
             train_history, train_ideal, classes, events, standards, segments,
-            latitude, longitude, TARGET_YEAR, TRAIN_YEARS,
+            latitude, longitude, years.axis_year, train_years,
         )
         logger.info("[2/4] 地市 %d/%d %s: 完成 (事件库 %d 个, GPR残差lag1 φ=%.2f)", i, total, city, len(events), phi)
         for case, scenario in city_scenarios.items():
             scenarios_target.setdefault(case, {})[city] = scenario
 
     # 步3：物理出力（地面温度用训练年逐小时气候平均值，与旧模型口径一致）
-    logger.info("[3/4] 物理出力计算: 读取 %d-%d 年温度格点求气候平均...", TRAIN_YEARS[0], TRAIN_YEARS[-1])
-    temp_by_city = load_city_series(grid_root, assignment_csv, "temperature", TRAIN_YEARS)
+    logger.info("[3/4] 物理出力计算: 读取 %d-%d 年温度格点求气候平均...", train_years[0], train_years[-1])
+    temp_by_city = load_city_series(grid_root, assignment_csv, "temperature", train_years)
     temp_by_city = {
-        city: weather_climatology(series, TRAIN_YEARS)
+        city: weather_climatology(series, train_years)
         for city, series in temp_by_city.items()
         if city in city_configs
     }

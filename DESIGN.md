@@ -26,7 +26,7 @@
 
 **共性**
 
-- 训练集固定 2000–2024 年，场景生成固定在 2025 年 8760 小时轴，重排到输出年份
+- 历史年份按数据目录解析（默认期望窗口 2000–2025，规则见 §3）：训练集=窗口内除最后一年，场景生成固定在最后一年 8760 小时轴（日历模板），重排到输出年份
 - 回归对齐冻结基准件（`.refactor_baseline/`）
 - 缺省默认：不传机组/数据目录时用服务端默认（数据目录=`data/hainan_era5_grid_csv`；机组：风电=全省 18 地市、光伏=儋州）
 - 结果双份返回：出力 CSV 写入 `output_dir` + JSON 表格数据返回
@@ -39,7 +39,8 @@
 - **格点归属表**：`data/海南地市分区/海南共同80格点_地市归属.csv`，地市 → 严格边界内格点列名（服务端写死，与算法版本绑定）
 - **统一 JSON 格式（风光共用骨架）**：`city_configs` 为数组（对象含 `city` 字段），重复地市报错；必填 `scenario.year`、`scenario.resource_year_type`、`output_dir`；可选及默认：`data_dir`（服务端默认数据目录）、`city_configs`（风电=全省 18 地市、光伏=儋州）、`loss_factor` 1.0、`albedo` 0.2（光伏）、`output_city_power` true、`evaluate` false（风电）；city 内部按域分化（风电 `turbines[]`，光伏 `components[]`+`latitude`/`longitude`）
 - **计算范围规则**：范围只由 `city_configs` 的键决定（传谁算谁）；聚合列（`province_*`/`区域总出力_*`）= 所传地市之和/容量加权，**列名不随范围变**，范围靠返回 `cities` 字段自曝；`data_dir` 只决定数据来源，须涵盖所传全部地市，缺文件/缺格点列/地市不在归属表均报错
-- **算法内部常数**（不进配置，代码内冻结，改动即改结果）：训练年份 2000–2024、分位阈值 P25/P75、P10/P90、事件最短持续 3h、校准强度、随机种子
+- **历史年份解析**（运行时按数据目录确定，`common/city_weather.resolve_years`）：期望窗口=服务端常量 `DEFAULT_YEARS`（`common/request.py`，默认 2000–2025 两端含）∩ 各流程实际 kind 年份（风电=wind，光伏=solar∩temperature）；取最大连续段，段外年份告警丢弃；段内逐年行数校验（闰年 8784/平年 8760，不符 `ValueError`）；年份数下限 12；训练年=除最后一年，场景轴年=最后一年（数据不参与统计，只当日历模板）
+- **算法内部常数**（不进配置，代码内冻结，改动即改结果）：分位阈值 P25/P75、P10/P90、事件最短持续 3h、校准强度、随机种子
 - **输出列集冻结**：风电 `time, province_wind_speed_m_s, province_power_mw, province_power_pu, {地市键}_power_mw×N`；光伏 `时间, {地市键}_总出力_MW×N, 区域总出力_MW, 区域总出力_pu`——列集是结果比对基准，改列即破坏回归
 - **返回 JSON 骨架（风光共用）**：`output_file`、`elapsed_s`、`scenario`、`cities`（实际计算范围）、`total_capacity_mw`、`power_table`（列名→8760/8784 长数组，与 CSV 同列同值）
 
@@ -59,7 +60,7 @@
          solar/{history,classify,events,generate,power}.py
                                 每个计算步骤一个模块，互不知道彼此
   ↓
-公共层   common/                格点读取（city_weather）、时间轴（time_axis）、统一请求解析（request）
+公共层   common/                格点读取与历史年份解析（city_weather）、时间轴（time_axis）、统一请求解析（request）
 ```
 
 - 原 `wind/run.py` 接口层随配置统一删除：`from_request` 的校验逻辑并入 pipeline 入口
@@ -74,7 +75,7 @@
 
 - pipeline 入参两种形态：JSON **文件路径**（CLI 用）或 JSON **dict**（服务层用），pipeline 内部识别
 - 校验与默认值填充在 pipeline 入口完成，是全项目唯一校验点
-- 字段归属：必填 `scenario.year`/`scenario.resource_year_type`/`output_dir`；可选（默认）`data_dir`、`city_configs`、`loss_factor`、`albedo`、`output_city_power`、`evaluate`；服务端写死：归属表（默认）、训练年份/阈值/种子（冻结常数）
+- 字段归属：必填 `scenario.year`/`scenario.resource_year_type`/`output_dir`；可选（默认）`data_dir`、`city_configs`、`loss_factor`、`albedo`、`output_city_power`、`evaluate`；服务端常量：归属表（默认）、历史年份期望窗口（`DEFAULT_YEARS`，实际范围随数据目录收窄，不进请求字段）；冻结常数：分位阈值、校准强度、随机种子
 
 **返回（写文件 + JSON 双份）**
 
@@ -105,8 +106,10 @@
 | 配置统一：光伏同模式改造                                               | 已完成                   | 三用例全过：儋州三景全量回归对冻结基准（场景+出力，总量≤1e-6）、默认值/文件dict等价、12 项非法请求（`tests/solar_selftest.py`，约 1 分钟） |
 | HTTP 服务层（`POST /api/*/run`）                                      | 已完成                   | 冒烟四项通过（`api/server/main_server.py`，端口 9998）：health 200、缺 output_dir→400 带字段名、光伏儋州真实计算 23s 返回全量 power_table、风电单市 13s 返回 8760×5 |
 | 收口：README 按`readme-structure` 定稿                                | 已完成                   | 统一 JSON 输入/双份返回/默认值/错误约定已同步进 README，章节按规则重排 |
+| 历史年份动态化：写死常量改为期望窗口∩数据目录解析（`resolve_years`），`TARGET_YEAR` 改名 `scenario_axis_year`，清除全部写死年份默认参数，窗口常量收进 `common/request.py` | 已完成                   | 真实目录解析=2000–2025（与原常量一致）；风电自测 4 用例全过（全省回归对冻结基准）、光伏自测 3 用例全过；README/DESIGN 年份口径已同步 |
+| 常数收拢：`RANDOM_SEED`（风/光各一份）、`CASE_NAMES`（两个 classify 各一份，与 `RESOURCE_YEAR_TYPES` 同事实）、`ENC`（四处定义）合并进 `common/request.py` 唯一定义 | 已完成                   | 全库各只剩一处定义（`RANDOM_SEED`/`ENC` 在 request.py，`CASE_NAMES` 删除、统一引用 `RESOURCE_YEAR_TYPES`）；风电 4 用例、光伏 3 用例全过，回归不变 |
 
-**当前进行到**：配置统一、回归、HTTP 服务层（9998 端口）、README 同步均已完成；无待办。
+**当前进行到**：配置统一、回归、HTTP 服务层（9998 端口）、README 同步、历史年份动态化、常数收拢均已完成；无待办。
 
 ## 7. 决策记录
 
@@ -123,3 +126,8 @@
 | 2026-10-18 | 配置三种表示并存（旧 dict / 请求体 / run() 手工互转），且服务层需要默认值与 JSON 表格返回 | 删接口层`run.py`，pipeline 成为唯一入口，直收统一 JSON（文件路径或 dict）；统一 JSON=请求体格式（数组`city_configs`，可查重复地市）；缺省默认：`data_dir`=服务端数据目录、`city_configs`风电=全省 18 地市/光伏=儋州；`output_dir` 必传；结果双份（CSV + JSON `power_table` 列名→数组）；错误约定：请求/数据错误一律`ValueError`上抛，服务层`ValueError`→400、其它→500 | 一种格式一种校验，CLI 与服务同路；聚合列名不随范围变，靠返回`cities`自曝范围；数组格式可查 JSON 字典查不了的重复地市 |
 | 2026-10-18 | HTTP 服务层编写规范如何定 | 自旧项目 industrial_vision 提取整理为通用 skill `service-api`（skills 17→18 条）：目录分层（api/core/算法包三块、依赖单向）、schema 三处分工、算法包只调唯一入口、POST 风格方法选择、`make_response` 返回体；错误风格弃源码的"一律 200 code 在 body"，改语义化状态码（400/404/409/500）+ 同款 body | 复用已验证的服务规范；语义化状态码利于监控告警与前端拦截器，与 §5 已定的 ValueError→400 约定一致 |
 | 2026-10-18 | 计算接口是否后台任务化（task_id+轮询） | 否决后台任务提案，保持同步阻塞：一个请求等到算完直接返回结果 JSON；请求体按 skill 3.3 透传例外不走 Pydantic（校验唯一在 pipeline 入口） | 接口最少、前端一次请求拿全量；无 DB 无处存任务表；部署侧调大代理超时（nginx proxy_read_timeout≥300s）即可覆盖全省 4 分钟 |
+| 2026-10-19 | 历史年份三常量（SOURCE/TRAIN/TARGET）写死 2000–2025，与数据目录实际内容脱节（wind/solar 实有 1950 起、temperature/pressure 2000 起、2026 为残年），且改口径要改两处代码 | 历史年份改为运行时解析（`common/city_weather.resolve_years`）：期望窗口=服务端常量 `DEFAULT_YEARS`（默认 2000–2025，改口径只改 `common/request.py` 一处）∩ 各流程实际 kind 年份（风电=wind，光伏=solar∩temperature），取最大连续段（段外告警丢弃），段内逐年行数校验（闰 8784/平 8760，不符 `ValueError`），年份数<12 报错；派生关系不变：训练年=除最后一年、场景轴年=最后一年（`TARGET_YEAR` 改名 `scenario_axis_year`，只当日历模板）；各函数写死的默认年份参数全部删除 | 数据目录是年份的事实来源，调用方不传范围避免冗余不匹配错误；窗口钳制保证口径变更必须显式改常量（走 git 评审）；部分取代「训练年份代码内冻结」决策（仍不进请求字段）；真实目录解析结果=2000–2025，回归不变 |
+| 2026-10-19 | `RANDOM_SEED`/`CASE_NAMES`/`ENC` 三组常数多处重复定义（同一事实两到四处维护，易漂移） | 收拢进 `common/request.py` 唯一定义：`RANDOM_SEED`、`ENC` 定义在 request.py，风/光 generate 与各 pipeline 改为引用；`CASE_NAMES` 删除，全部改用 request.py 既有的 `RESOURCE_YEAR_TYPES`（同一事实一个名字） | 换复口径/编码改动只改一处；值与顺序不变故回归不变（风电 4 用例、光伏 3 用例全过）；对外契约零变化 |
+| 2026-10-19 | 新建 .py 文件的文件头无统一规则（用户有 VSCode 片段 pyheader 但仅限手工触发） | 新增通用 skill `code-header`（skills 18→19 条）：新建 .py 文件写 shebang + 编码声明 + `@Time/@Author/@File` 元信息块；@Time 取创建时刻（date 命令）、@Author 固定 weiyutao、@File 不带路径；模块说明并入同一 docstring；旧文件不回补 | 用户的文件头习惯固化为规则，AI 新建文件自动遵循；不回补旧文件避免无信息量 diff（用户明示要求创建该 skill） |
+| 2026-10-19 | CLAUDE.md 文档分工段的 skill 数量"（18 条）"随新增 skill 过期（实际 19） | 删去数字，只留"通用项目规则在 `.claude/skills/`"（用户原话："筛掉数字吧"） | 数量每加一条 skill 就过期，删掉后不再需要同步；留痕按 doc-roles §3（非用户明示不可改区的明示修改） |
+| 2026-10-19 | 存量 .py 文件无 code-header 文件头，新旧文件格式不一致 | 一次性批量回补：28 个有内容文件加 shebang+编码+`@Time/@Author/@File` 头（@Time 用 git 首次提交时间 2026/10/18 19:35，docstring 并入同一三引号块），3 个空 `__init__.py` 跳过；skill 第 3 条改为"默认不主动回补，明示时批量同步" | 用户明示要求同步（"直接用这个 code-header skill 去同步格式吧"）；纯注释/docstring 改动，风电 4 用例、光伏 3 用例回归全过 |

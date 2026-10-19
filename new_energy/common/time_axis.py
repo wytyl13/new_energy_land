@@ -1,5 +1,12 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""时间轴工具：逐年小时索引与闰日处理，风电/光伏流程共用。"""
+"""
+@Time    : 2026/10/18 19:35
+@Author  : weiyutao
+@File    : time_axis.py
+
+时间轴工具：逐年小时索引与闰日处理，风电/光伏流程共用。
+"""
 from __future__ import annotations
 
 import numpy as np
@@ -55,10 +62,10 @@ def beijing_aligned(series: pd.Series, source_years: tuple[int, ...]) -> pd.Seri
 
 
 def remap_to_year(series: pd.Series, year: int) -> pd.Series:
-    """把 2025 年时间轴的场景重排到输出年份（闰年补 2 月 29 日，时间插值）。
+    """把场景轴年份时间轴的场景重排到输出年份（闰年补 2 月 29 日，时间插值）。
 
     Args:
-        series (pd.Series): 2025 年（8760 小时）时间轴的场景序列。
+        series (pd.Series): 场景轴年份（8760 小时）时间轴的场景序列。
         year (int): 输出年份。
 
     Returns:

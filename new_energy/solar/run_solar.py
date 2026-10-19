@@ -1,5 +1,11 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""光伏出力 CLI 入口：python -m new_energy.solar.run_solar 配置.json
+"""
+@Time    : 2026/10/18 19:35
+@Author  : weiyutao
+@File    : run_solar.py
+
+光伏出力 CLI 入口：python -m new_energy.solar.run_solar 配置.json
 
 薄壳：配置 JSON（文件路径）交给 pipeline 唯一入口 run_solar，写 CSV 与结果
 JSON 均由其完成，此处只做日志与摘要打印。

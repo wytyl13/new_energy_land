@@ -1,5 +1,11 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""光伏 pipeline 唯一入口自测：统一 JSON（文件/dict）校验 + 全流程回归。
+"""
+@Time    : 2026/10/18 19:35
+@Author  : weiyutao
+@File    : solar_selftest.py
+
+光伏 pipeline 唯一入口自测：统一 JSON（文件/dict）校验 + 全流程回归。
 
 运行（仓库根目录）:
     python -m tests.solar_selftest
@@ -47,7 +53,8 @@ def _check(name: str, fn) -> None:
 
 
 def _assert_close(actual: np.ndarray, ref: np.ndarray, what: str) -> None:
-    """容差判据：总量相对偏差 ≤1e-6，逐元素 |差| ≤ 1e-6 + 1e-4×|基准值|（覆盖基准文件 6 位小数舍入）。"""
+    """容差判据：总量相对偏差 ≤1e-6，逐元素 |差| ≤ 1e-6 + 1e-4×|基准值|（覆盖基准文件 6 位小数舍入）。
+"""
     assert actual.shape == ref.shape, f"{what} 规模不符: 基准{ref.shape} vs 实际{actual.shape}"
     total_ref = float(np.abs(ref).sum())
     total_rel = float(np.abs(actual.sum() - ref.sum()) / max(total_ref, 1e-12))

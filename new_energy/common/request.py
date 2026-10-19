@@ -1,5 +1,11 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""统一 JSON 请求的公共解析件：文件/dict 装载、字段类型校验、归属表地市键。
+"""
+@Time    : 2026/10/18 19:35
+@Author  : weiyutao
+@File    : request.py
+
+统一 JSON 请求的公共解析件：文件/dict 装载、字段类型校验、归属表地市键。
 
 风电/光伏 pipeline 的 _parse_request 共用；所有校验失败抛 ValueError 并指明
 字段/文件/地市（服务层据此映射 400）。
@@ -17,6 +23,11 @@ ENC = "utf-8-sig"
 _ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_DATA_DIR = _ROOT / "data" / "hainan_era5_grid_csv"
 DEFAULT_ASSIGNMENT = _ROOT / "data" / "海南地市分区" / "海南共同80格点_地市归属.csv"
+
+# 服务端历史口径默认值（扩历史范围时改这里）
+DEFAULT_YEARS = (2000, 2025)  # 历史数据期望窗口，两端年份均包含；数据超出窗口不纳入
+MIN_HISTORY_YEARS = 12  # 历史年份下限，低于此值报错（三类资源年各需足够样本）
+RANDOM_SEED = 20261008  # 场景生成随机种子（风电/光伏共用同一复现口径）
 
 RESOURCE_YEAR_TYPES = ("偏小资源年", "正常资源年", "偏大资源年")
 
@@ -63,6 +74,7 @@ def number(value: object, name: str) -> float:
 
 
 def assignment_keys(assignment_csv: Path) -> set[str]:
-    """读归属表，返回全部合法地市键集合（行政区代码_地市名）。"""
+    """读归属表，返回全部合法地市键集合（行政区代码_地市名）。
+"""
     table = pd.read_csv(assignment_csv, encoding=ENC)
     return {f"{int(code)}_{city}" for code, city in zip(table["city_code"], table["city"])}

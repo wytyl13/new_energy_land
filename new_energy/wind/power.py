@@ -1,5 +1,12 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""步6：风电物理出力（轮毂高度切变、空气密度、分段立方功率曲线、省市汇总）。"""
+"""
+@Time    : 2026/10/18 19:35
+@Author  : weiyutao
+@File    : power.py
+
+步6：风电物理出力（轮毂高度切变、空气密度、分段立方功率曲线、省市汇总）。
+"""
 from __future__ import annotations
 
 import numpy as np

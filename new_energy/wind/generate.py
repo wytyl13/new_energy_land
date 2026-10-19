@@ -1,5 +1,11 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""步4+5：GPR 基础场景生成与逐级校准、极端事件插入，得到三类 8760 小时风速场景。
+"""
+@Time    : 2026/10/18 19:35
+@Author  : weiyutao
+@File    : generate.py
+
+步4+5：GPR 基础场景生成与逐级校准、极端事件插入，得到三类 8760 小时风速场景。
 
 算法与旧版 generate_city_wind_scenarios_template.py 逐行等价，参数与随机种子不变，
 仅去掉了文件读写。
@@ -15,11 +21,10 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import ConstantKernel, RBF, WhiteKernel
 from sklearn.preprocessing import StandardScaler
 
+from ..common.request import RANDOM_SEED, RESOURCE_YEAR_TYPES
 from ..common.time_axis import no_feb29, year_index
-from .classify import CASE_NAMES
 from .events import contiguous_runs
 
-RANDOM_SEED = 20261008
 GPR_SAMPLE_SIZE = 800
 SOFT_QUANTILE_STRENGTH = 1.0     # 事件插入前逐月分位数校准强度
 GLOBAL_MAPPING_STRENGTH = 0.50   # 事件插入后全局经验分位数映射强度
@@ -298,8 +303,8 @@ def generate_scenarios(
     events: pd.DataFrame,
     standards: pd.DataFrame,
     segments: dict[str, np.ndarray],
-    target_year: int = 2025,
-    train_years: tuple[int, ...] = tuple(range(2000, 2025)),
+    scenario_axis_year: int,
+    train_years: tuple[int, ...],
 ) -> tuple[dict[str, pd.Series], pd.DataFrame, float]:
     """生成三类资源年场景：基础场景 → 逐级校准 → 事件插入 → 全局映射。
 
@@ -309,14 +314,14 @@ def generate_scenarios(
         events (pd.DataFrame): extract_events 输出的事件表。
         standards (pd.DataFrame): build_event_standards 输出的年均次数标准。
         segments (dict[str, np.ndarray]): 事件序列字典。
-        target_year (int): 场景时间轴所在年份。
+        scenario_axis_year (int): 场景时间轴年份（只当日历模板，借 8760 小时轴用）。
         train_years (tuple[int, ...]): 训练年份。
 
     Returns:
         tuple[dict[str, pd.Series], pd.DataFrame, float]:
             (三类场景字典, 事件插入方案汇总表, GPR 残差 lag1 系数 φ)。
     """
-    target_index = year_index(target_year)
+    target_index = year_index(scenario_axis_year)
     target_index = target_index[no_feb29(target_index)]
     logger.info("GPR 基础场景拟合: %s (训练样本 %d 小时, 采样 %d)...",
                 history.name, len(history), min(GPR_SAMPLE_SIZE, len(history)))
@@ -326,7 +331,7 @@ def generate_scenarios(
 
     scenarios: dict[str, pd.Series] = {}
     all_plans = []
-    for i, case in enumerate(CASE_NAMES):
+    for i, case in enumerate(RESOURCE_YEAR_TYPES):
         years = classes.loc[
             classes["资源年类型"].eq(case) & classes.year.isin(train_years), "year"
         ].astype(int).tolist()

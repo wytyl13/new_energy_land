@@ -1,5 +1,11 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""风电 pipeline 唯一入口自测：统一 JSON（文件/dict）校验 + 全流程回归。
+"""
+@Time    : 2026/10/18 19:35
+@Author  : weiyutao
+@File    : wind_run_selftest.py
+
+风电 pipeline 唯一入口自测：统一 JSON（文件/dict）校验 + 全流程回归。
 
 运行（仓库根目录）:
     python -m tests.wind_run_selftest

@@ -1,12 +1,19 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""可选评估：三类风速场景与历史同类年的量化指标（内存返回，不写文件）。"""
+"""
+@Time    : 2026/10/18 19:35
+@Author  : weiyutao
+@File    : evaluate.py
+
+可选评估：三类风速场景与历史同类年的量化指标（内存返回，不写文件）。
+"""
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
+from ..common.request import RESOURCE_YEAR_TYPES
 from ..common.time_axis import no_feb29
-from .classify import CASE_NAMES
 
 AUTOCORR_LAGS = [1, 2, 3, 6, 12, 24, 48, 72, 168]
 
@@ -157,7 +164,7 @@ def evaluate_city(city: str, history: pd.Series, classes: pd.DataFrame, scenario
         pd.DataFrame: 三行指标表，每行对应一类资源年。
     """
     rows = []
-    for case in CASE_NAMES:
+    for case in RESOURCE_YEAR_TYPES:
         years = classes.loc[
             classes["资源年类型"].eq(case) & classes.year.isin(train_years), "year"
         ].astype(int).tolist()

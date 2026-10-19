@@ -1,5 +1,11 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""风电全流程组织：原始格点数据 → 三类风速场景 → 全省出力，中间结果全部在内存。
+"""
+@Time    : 2026/10/18 19:35
+@Author  : weiyutao
+@File    : pipeline.py
+
+风电全流程组织：原始格点数据 → 三类风速场景 → 全省出力，中间结果全部在内存。
 
 run_wind 是风电对外唯一入口：收统一 JSON（文件路径或 dict），在入口完成
 校验与默认值填充（全项目唯一校验点），执行全流程后写出力 CSV 并返回结果
@@ -16,10 +22,11 @@ from pathlib import Path
 
 import pandas as pd
 
-from ..common.city_weather import load_city_series
+from ..common.city_weather import load_city_series, resolve_years
 from ..common.request import (
     DEFAULT_ASSIGNMENT,
     DEFAULT_DATA_DIR,
+    ENC,
     RESOURCE_YEAR_TYPES,
     assignment_keys,
     fail,
@@ -36,9 +43,8 @@ from .generate import generate_scenarios
 from .history import build_history
 from .power import compute_power
 
-SOURCE_YEARS = tuple(range(2000, 2026))
-TRAIN_YEARS = tuple(range(2000, 2025))
-TARGET_YEAR = 2025  # 场景生成固定在2025年8760小时时间轴上
+# 历史年份不再写死：按数据目录实际内容解析（期望窗口见 common.request.DEFAULT_YEARS，
+# 解析规则见 common.city_weather.resolve_years），训练年 = 除最后一年，场景轴年 = 最后一年。
 
 # 服务端默认：全省机组配置（数据目录/归属表在 common.request）
 DEFAULT_CITY_CONFIGS = Path(__file__).resolve().parent / "default_city_configs.json"
@@ -56,14 +62,14 @@ TURBINE_REQUIRED = (
     "model", "count", "rated_power_mw", "hub_height_m",
     "cut_in_m_s", "rated_m_s", "cut_out_m_s",
 )
-ENC = "utf-8-sig"
 
 logger = logging.getLogger(__name__)
 
 
 @dataclass
 class WindResult:
-    """风电全流程输出结果：三类场景、全省出力表、资源年分类与评估指标。"""
+    """风电全流程输出结果：三类场景、全省出力表、资源年分类与评估指标。
+"""
 
     scenarios: dict[str, dict[str, pd.Series]]      # case → 地市键 → 输出年时间轴的8760+场景
     power: dict[str, pd.DataFrame]                   # case → 全省出力表
@@ -233,7 +239,8 @@ def run_wind(source: dict | str | Path) -> dict:
 
 
 def _compute(cfg: dict) -> WindResult:
-    """执行风电全流程：格点风速 → 三类场景生成 → 全省出力。"""
+    """执行风电全流程：格点风速 → 三类场景生成 → 全省出力。
+"""
     grid_root = cfg["data_dir"]
     assignment_csv = cfg["assignment_file"]
     year = cfg["year"]
@@ -242,8 +249,11 @@ def _compute(cfg: dict) -> WindResult:
     output_city_power = cfg["output_city_power"]
 
     # 步1：格点 → 各地市风速历史（一次读入，全部地市同时聚合）
-    logger.info("[1/6] 读取风速格点并聚合到地市 (%d-%d年)...", SOURCE_YEARS[0], SOURCE_YEARS[-1])
-    wind_by_city = load_city_series(grid_root, assignment_csv, "wind", SOURCE_YEARS)
+    # 历史年份按数据目录实际内容解析：期望窗口 ∩ 实际存在的年份（wind 单一类型）
+    years = resolve_years(grid_root, ("wind",))
+    source_years, train_years = years.source_years, years.train_years
+    logger.info("[1/6] 读取风速格点并聚合到地市 (%d-%d年)...", source_years[0], source_years[-1])
+    wind_by_city = load_city_series(grid_root, assignment_csv, "wind", source_years)
     logger.info("[1/6] 完成: 共 %d 个地市", len(wind_by_city))
     # 计算范围以 city_configs 的键为准（支持单市请求）：
     # 配置了但归属表/数据没有的地市 → 报错；数据有但配置没有 → 忽略。
@@ -262,20 +272,20 @@ def _compute(cfg: dict) -> WindResult:
     total = len(wind_by_city)
     for i, (city, wind) in enumerate(wind_by_city.items(), 1):
         logger.info("[2-5/6] 地市 %d/%d %s: 资源年分类→事件库→GPR场景生成开始", i, total, city)
-        history = build_history(wind, SOURCE_YEARS)
-        train_history = history.loc[history.index.year.isin(TRAIN_YEARS)]
+        history = build_history(wind, source_years)
+        train_history = history.loc[history.index.year.isin(train_years)]
 
         # 步2：资源年分类
-        classes = classify_years(history, TRAIN_YEARS)
+        classes = classify_years(history, train_years)
         classes_all[city] = classes
 
         # 步3：极端事件库与标准
-        events, segments = extract_events(train_history, classes, TRAIN_YEARS)
-        standards = build_event_standards(events, classes, TRAIN_YEARS)
+        events, segments = extract_events(train_history, classes, train_years)
+        standards = build_event_standards(events, classes, train_years)
 
         # 步4+5：GPR基础场景 + 逐级校准与事件插入
         city_scenarios, plans, phi = generate_scenarios(
-            train_history, classes, events, standards, segments, TARGET_YEAR, TRAIN_YEARS
+            train_history, classes, events, standards, segments, years.axis_year, train_years
         )
         logger.info(
             "[2-5/6] 地市 %d/%d %s: 完成 (事件库 %d 个, GPR残差lag1 φ=%.2f)",
@@ -285,7 +295,7 @@ def _compute(cfg: dict) -> WindResult:
             plan_by_case = {case: plans.loc[plans["年景类型"].eq(case)] for case in set(plans["年景类型"])}
             logger.info("[评估] 地市 %s: 指标计算完成", city)
             metrics_rows.append(
-                evaluate_mod.evaluate_city(city, train_history, classes, city_scenarios, plan_by_case, TRAIN_YEARS)
+                evaluate_mod.evaluate_city(city, train_history, classes, city_scenarios, plan_by_case, train_years)
             )
         for case, scenario in city_scenarios.items():
             scenarios.setdefault(case, {})[city] = remap_to_year(scenario, year)

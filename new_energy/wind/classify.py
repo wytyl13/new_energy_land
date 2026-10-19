@@ -1,5 +1,12 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""步2：资源年分类（mean(v³) 的 P25/P75 → 偏小/正常/偏大资源年）。"""
+"""
+@Time    : 2026/10/18 19:35
+@Author  : weiyutao
+@File    : classify.py
+
+步2：资源年分类（mean(v³) 的 P25/P75 → 偏小/正常/偏大资源年）。
+"""
 from __future__ import annotations
 
 import numpy as np
@@ -7,12 +14,10 @@ import pandas as pd
 
 from ..common.time_axis import no_feb29
 
-CASE_NAMES = ["偏小资源年", "正常资源年", "偏大资源年"]
-
 
 def classify_years(
     history: pd.Series,
-    train_years: tuple[int, ...] = tuple(range(2000, 2025)),
+    train_years: tuple[int, ...],
 ) -> pd.DataFrame:
     """按年平均风速立方把每一年分为偏小/正常/偏大资源年。
 

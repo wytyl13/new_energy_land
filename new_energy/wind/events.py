@@ -1,11 +1,18 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""步3：极端风速事件库（P10/P90、持续≥3h）与分资源年分月事件标准。"""
+"""
+@Time    : 2026/10/18 19:35
+@Author  : weiyutao
+@File    : events.py
+
+步3：极端风速事件库（P10/P90、持续≥3h）与分资源年分月事件标准。
+"""
 from __future__ import annotations
 
 import numpy as np
 import pandas as pd
 
-from .classify import CASE_NAMES
+from ..common.request import RESOURCE_YEAR_TYPES
 
 
 def contiguous_runs(mask: np.ndarray) -> list[tuple[int, int]]:
@@ -25,7 +32,7 @@ def contiguous_runs(mask: np.ndarray) -> list[tuple[int, int]]:
 def extract_events(
     history: pd.Series,
     year_class: pd.DataFrame,
-    train_years: tuple[int, ...] = tuple(range(2000, 2025)),
+    train_years: tuple[int, ...],
 ) -> tuple[pd.DataFrame, dict[str, np.ndarray]]:
     """从训练年份历史中提取低风/大风极端事件及各事件的原始序列。
 
@@ -71,7 +78,7 @@ def extract_events(
 def build_event_standards(
     events: pd.DataFrame,
     year_class: pd.DataFrame,
-    train_years: tuple[int, ...] = tuple(range(2000, 2025)),
+    train_years: tuple[int, ...],
 ) -> pd.DataFrame:
     """统计分资源年、分月份、分事件类型的年均发生次数，作为插入标准。
 
@@ -84,7 +91,7 @@ def build_event_standards(
         pd.DataFrame: 每行一个（年景类型, 月份, 事件类型）组合的年均事件次数。
     """
     rows = []
-    for case in CASE_NAMES:
+    for case in RESOURCE_YEAR_TYPES:
         years = year_class.loc[
             year_class.year.isin(train_years) & year_class["资源年类型"].eq(case), "year"
         ].astype(int).tolist()

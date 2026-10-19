@@ -1,5 +1,11 @@
+#!/usr/bin/env python
 # -*- coding: utf-8 -*-
-"""步4+5：三类辐照度场景生成。
+"""
+@Time    : 2026/10/18 19:35
+@Author  : weiyutao
+@File    : generate.py
+
+步4+5：三类辐照度场景生成。
 
 理想辐照度与实际辐照度之差作为辐照损失，GPR 拟合季节/日变化，日内 AR(1) 残差
 抽样；再按资源年做温和分位数校准、按标准插入低辐照极端事件、月累计能量校正。
@@ -13,13 +19,12 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import ConstantKernel, RBF, WhiteKernel
 from sklearn.preprocessing import StandardScaler
 
+from ..common.request import RANDOM_SEED, RESOURCE_YEAR_TYPES
 from ..common.time_axis import no_feb29, year_index
-from .classify import CASE_NAMES
 from .events import EVENT_IDEAL_THRESHOLD
 
 DAYLIGHT_THRESHOLD = 50.0  # 理想辐照度超过该值视为有效白天，其他时段生成辐照度置零（W/m2）
 QUANTILE_BLEND = 0.45      # 分位数校准混合强度
-RANDOM_SEED = 20261008
 GPR_SAMPLE_SIZE = 900      # GPR 训练抽样点数
 
 
@@ -323,10 +328,10 @@ def generate_scenarios(
     segments: dict[str, np.ndarray],
     latitude: float,
     longitude: float,
-    target_year: int = 2025,
-    train_years: tuple[int, ...] = tuple(range(2000, 2025)),
+    scenario_axis_year: int,
+    train_years: tuple[int, ...],
 ) -> tuple[dict[str, pd.Series], pd.DataFrame, float]:
-    """生成三类资源年的辐照度场景（目标年 8760 小时时间轴）。
+    """生成三类资源年的辐照度场景（场景轴年 8760 小时时间轴）。
 
     Args:
         history (pd.Series): 训练年辐照度历史序列。
@@ -337,14 +342,14 @@ def generate_scenarios(
         segments (dict[str, np.ndarray]): 事件编号 → 辐照损失段。
         latitude (float): 地市代表性纬度（度）。
         longitude (float): 地市代表性经度（度）。
-        target_year (int): 场景生成的目标年份。
+        scenario_axis_year (int): 场景时间轴年份（只当日历模板，借 8760 小时轴用）。
         train_years (tuple[int, ...]): 训练年份范围。
 
     Returns:
         tuple[dict[str, pd.Series], pd.DataFrame, float]:
             (资源年类型 → 场景序列, 三类插入方案合并表, GPR 残差 lag-1 系数 φ)。
     """
-    target_index = year_index(target_year)
+    target_index = year_index(scenario_axis_year)
     target_index = target_index[no_feb29(target_index)]
     target_ideal = pd.Series(ideal_irradiance(target_index, latitude, longitude), index=target_index, name="理想辐照度_W_m2")
 
@@ -353,7 +358,7 @@ def generate_scenarios(
 
     scenarios: dict[str, pd.Series] = {}
     plans = []
-    for i, case in enumerate(CASE_NAMES):
+    for i, case in enumerate(RESOURCE_YEAR_TYPES):
         years = classes.loc[classes["资源年类型"].eq(case) & classes.year.isin(train_years), "year"].astype(int).tolist()
         if not years:
             raise ValueError(f"没有{case}训练年")
