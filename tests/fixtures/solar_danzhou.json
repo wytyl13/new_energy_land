@@ -1,9 +1,11 @@
 {
-  "data_dir": "c:/Users/weiyutao/20260823/new_energy_land/data/hainan_era5_grid_csv",
-  "output_dir": "c:/Users/weiyutao/20260823/new_energy_land/tests/output",
-  "scenario": {"year": 2025, "resource_year_type": "正常资源年"},
-  "loss_factor": 0.90,
-  "albedo": 0.20,
+  "output_dir": "tests/output",
+  "scenario": {
+    "year": 2025,
+    "resource_year_type": "正常资源年"
+  },
+  "loss_factor": 0.9,
+  "albedo": 0.2,
   "city_configs": [
     {
       "city": "460400_儋州市",
@@ -11,10 +13,24 @@
       "latitude": 19.56,
       "longitude": 109.58,
       "components": [
-        {"name": "常规组件", "capacity_share": 0.60, "tilt_deg": 18.0, "azimuth_deg": 180.0,
-         "noct_c": 45.0, "gamma_p_per_c": -0.0040, "efficiency": 1.0},
-        {"name": "低温升高效组件", "capacity_share": 0.40, "tilt_deg": 15.0, "azimuth_deg": 180.0,
-         "noct_c": 42.0, "gamma_p_per_c": -0.0035, "efficiency": 1.0}
+        {
+          "name": "常规组件",
+          "capacity_share": 0.6,
+          "tilt_deg": 18.0,
+          "azimuth_deg": 180.0,
+          "noct_c": 45.0,
+          "gamma_p_per_c": -0.004,
+          "efficiency": 1.0
+        },
+        {
+          "name": "低温升高效组件",
+          "capacity_share": 0.4,
+          "tilt_deg": 15.0,
+          "azimuth_deg": 180.0,
+          "noct_c": 42.0,
+          "gamma_p_per_c": -0.0035,
+          "efficiency": 1.0
+        }
       ]
     }
   ],

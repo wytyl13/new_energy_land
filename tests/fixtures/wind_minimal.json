@@ -1,4 +1,7 @@
 {
-  "scenario": {"year": 2024, "resource_year_type": "正常资源年"},
-  "output_dir": "c:/Users/weiyutao/20260823/new_energy_land/tests/output"
+  "scenario": {
+    "year": 2024,
+    "resource_year_type": "正常资源年"
+  },
+  "output_dir": "tests/output"
 }

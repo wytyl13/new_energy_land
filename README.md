@@ -16,6 +16,42 @@ pip install -r requirements.txt
 
 > 原始气象数据（1.9G）不入库：克隆后需将海南 ERA5 格点数据放到 `data/hainan_era5_grid_csv/`（子目录结构见下文风电/光伏"输入"节），否则计算因缺数据文件报错。
 
+## 核心算法维护与版本更新
+
+> 采用 **Fork + Pull Request** 模式：协作者不需要仓库权限，所有改动经仓库所有者审核合并后才进入 `main`。
+
+```bash
+# 0. 网页 Fork：打开 github.com/wytyl13/new_energy_land → 右上角 Fork 到自己账号（一次性）
+
+# 1. 首次：克隆自己的 Fork + 配置身份 + 关联上游
+git clone https://github.com/你的账号/new_energy_land.git
+cd new_energy_land
+git config user.name "姓名"
+git config user.email "邮箱"
+git remote add upstream https://github.com/wytyl13/new_energy_land.git
+
+# 2. 每次开发前：同步上游最新代码（仓库只有 main 分支，无 dev）
+git checkout main
+git pull upstream main
+git push origin main
+
+# 3. 建功能分支开发（核心算法代码在 new_energy/ 下）
+git checkout -b feature/algo-update
+git add new_energy/
+git commit -m "feature(algo): 描述改了什么"
+
+# 4. 推送到自己的 Fork
+git push origin feature/algo-update
+
+# 5. 网页开 Pull Request：从 你的账号:feature/algo-update → wytyl13/new_energy_land:main
+#    仓库所有者审核后点 Merge
+
+# 6. 合并后同步并清理
+git checkout main && git pull upstream main && git push origin main
+git branch -d feature/algo-update
+git push origin --delete feature/algo-update
+```
+
 ## 运行风电全流程（CLI 单脚本）
 
 ```powershell
