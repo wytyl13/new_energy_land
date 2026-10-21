@@ -53,10 +53,11 @@ REQUEST_FIELDS = {
     "loss_factor", "albedo", "output_city_power",
 }
 CITY_FIELDS = {"city", "capacity_mw", "latitude", "longitude", "components"}
+CITY_REQUIRED = ("city", "capacity_mw", "components")
 COMPONENT_FIELDS = {
-    "name", "capacity_share", "tilt_deg", "azimuth_deg", "noct_c", "gamma_p_per_c", "efficiency",
+    "name", "count", "rated_power_mw", "tilt_deg", "azimuth_deg", "noct_c", "gamma_p_per_c", "efficiency",
 }
-COMPONENT_REQUIRED = ("name", "capacity_share", "tilt_deg", "azimuth_deg", "noct_c", "gamma_p_per_c")
+COMPONENT_REQUIRED = ("name", "count", "rated_power_mw", "tilt_deg", "azimuth_deg", "noct_c", "gamma_p_per_c")
 
 logger = logging.getLogger(__name__)
 
@@ -88,12 +89,16 @@ def _parse_component(raw: object, index: int) -> dict:
     for key in COMPONENT_REQUIRED:
         if key not in raw:
             fail(f"{ctx} 缺少必填字段 {key}")
-    share = number(raw["capacity_share"], f"{ctx}.capacity_share")
-    if not 0 < share <= 1:
-        fail(f"{ctx}.capacity_share 必须在 (0, 1]")
+    count = number(raw["count"], f"{ctx}.count")
+    if count != int(count) or count <= 0:
+        fail(f"{ctx}.count 必须是正整数")
+    rated = number(raw["rated_power_mw"], f"{ctx}.rated_power_mw")
+    if rated <= 0:
+        fail(f"{ctx}.rated_power_mw 必须为正")
     return {
         "name": string(raw["name"], f"{ctx}.name"),
-        "capacity_share": share,
+        "count": int(count),
+        "rated_power_mw": rated,
         "tilt_deg": number(raw["tilt_deg"], f"{ctx}.tilt_deg"),
         "azimuth_deg": number(raw["azimuth_deg"], f"{ctx}.azimuth_deg"),
         "noct_c": number(raw["noct_c"], f"{ctx}.noct_c"),
@@ -102,13 +107,16 @@ def _parse_component(raw: object, index: int) -> dict:
     }
 
 
-def _parse_city(raw: object, index: int, valid_keys: set[str]) -> tuple[str, dict]:
+def _parse_city(
+    raw: object, index: int, valid_keys: set[str], centers: dict[str, tuple[float, float]]
+) -> tuple[str, dict]:
     """校验单个地市配置，返回 (地市键, 规范化配置)。
 
     Args:
         raw (object): 请求中的地市对象。
         index (int): 在 city_configs 数组中的下标（报错定位用）。
         valid_keys (set[str]): 归属表全部合法地市键。
+        centers (dict[str, tuple[float, float]]): 归属表地市格点中心（latitude/longitude 缺省值）。
 
     Returns:
         tuple[str, dict]: 地市键与规范化配置（capacity_mw/latitude/longitude/components）。
@@ -117,7 +125,7 @@ def _parse_city(raw: object, index: int, valid_keys: set[str]) -> tuple[str, dic
     if not isinstance(raw, dict):
         fail(f"{ctx} 必须是对象")
     reject_unknown(raw, CITY_FIELDS, ctx)
-    for key in CITY_FIELDS:
+    for key in CITY_REQUIRED:
         if key not in raw:
             fail(f"{ctx} 缺少必填字段 {key}")
     city = string(raw["city"], f"{ctx}.city")
@@ -126,19 +134,23 @@ def _parse_city(raw: object, index: int, valid_keys: set[str]) -> tuple[str, dic
     capacity = number(raw["capacity_mw"], f"{ctx}.capacity_mw")
     if capacity <= 0:
         fail(f"{ctx}.capacity_mw 必须为正")
-    latitude = number(raw["latitude"], f"{ctx}.latitude")
-    longitude = number(raw["longitude"], f"{ctx}.longitude")
-    if not -90 <= latitude <= 90:
-        fail(f"{ctx}.latitude 必须在 [-90, 90]")
-    if not -180 <= longitude <= 180:
-        fail(f"{ctx}.longitude 必须在 [-180, 180]")
+    if "latitude" in raw or "longitude" in raw:
+        if "latitude" not in raw or "longitude" not in raw:
+            fail(f"{ctx}.latitude/longitude 须同时提供或同时缺省")
+        latitude = number(raw["latitude"], f"{ctx}.latitude")
+        longitude = number(raw["longitude"], f"{ctx}.longitude")
+        if not -90 <= latitude <= 90:
+            fail(f"{ctx}.latitude 必须在 [-90, 90]")
+        if not -180 <= longitude <= 180:
+            fail(f"{ctx}.longitude 必须在 [-180, 180]")
+    else:
+        if city not in centers:
+            fail(f"{ctx} 未提供 latitude/longitude，且归属表无该地市格点中心")
+        latitude, longitude = centers[city]
     components_raw = raw["components"]
     if not isinstance(components_raw, list) or not components_raw:
         fail(f"{ctx}.components 必须是非空数组")
     components = [_parse_component(c, j) for j, c in enumerate(components_raw)]
-    share_sum = sum(c["capacity_share"] for c in components)
-    if abs(share_sum - 1.0) > 1e-6:
-        fail(f"{ctx}.components 的 capacity_share 合计应为 1，实际 {share_sum:g}")
     return city, {
         "capacity_mw": capacity,
         "latitude": latitude,
@@ -203,9 +215,10 @@ def _parse_request(source: dict | str | Path) -> dict:
     if not isinstance(raw_cities, list) or not raw_cities:
         fail("city_configs 必须是非空数组")
     valid_keys = assignment_keys(assignment_file)
+    centers = city_centers(assignment_file)
     city_configs: dict[str, dict] = {}
     for i, raw in enumerate(raw_cities):
-        city, cfg = _parse_city(raw, i, valid_keys)
+        city, cfg = _parse_city(raw, i, valid_keys, centers)
         if city in city_configs:
             fail(f"city_configs 存在重复地市: {city}")
         city_configs[city] = cfg

@@ -106,6 +106,8 @@ def compute_power(
         for city, cfg in city_configs.items():
             ghi = city_scenarios[city].to_numpy(float)
             temp_c = temp_by_city[city].to_numpy(float) - 273.15
+            configured = sum(float(c["count"]) * float(c["rated_power_mw"]) for c in cfg["components"])
+            scale = float(cfg["capacity_mw"]) / max(configured, 1e-9)
             city_total = np.zeros(len(target_index))
             for comp in cfg["components"]:
                 params = {
@@ -118,7 +120,7 @@ def compute_power(
                 g = poa(ghi, target_index, params)
                 tc = temp_c + (comp["noct_c"] - 20) / 800 * g
                 p = (
-                    float(cfg["capacity_mw"]) * float(comp["capacity_share"]) * loss_factor
+                    float(comp["count"]) * float(comp["rated_power_mw"]) * scale * loss_factor
                     * float(comp.get("efficiency", 1))
                     * np.clip(g / 1000 * (1 + comp["gamma_p_per_c"] * (tc - 25)), 0, 1.2)
                 )

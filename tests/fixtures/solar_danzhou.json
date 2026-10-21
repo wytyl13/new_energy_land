@@ -15,7 +15,8 @@
       "components": [
         {
           "name": "常规组件",
-          "capacity_share": 0.6,
+          "count": 3,
+          "rated_power_mw": 200.0,
           "tilt_deg": 18.0,
           "azimuth_deg": 180.0,
           "noct_c": 45.0,
@@ -24,7 +25,8 @@
         },
         {
           "name": "低温升高效组件",
-          "capacity_share": 0.4,
+          "count": 2,
+          "rated_power_mw": 200.0,
           "tilt_deg": 15.0,
           "azimuth_deg": 180.0,
           "noct_c": 42.0,

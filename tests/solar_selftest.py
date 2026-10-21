@@ -13,7 +13,7 @@
 用例：
     1 全流程回归   儋州单市，三类辐照度场景与区域出力均与冻结基准容差一致 + 公共入口双份返回核对
     2 默认值       缺 data_dir/city_configs 时填服务端默认（儋州）；文件与 dict 解析等价
-    3 非法请求     缺字段/未知字段/重复地市/越界地市/组件占比和≠1/缺目录/坏类型 → 报错指明字段
+    3 非法请求     缺字段/未知字段/重复地市/越界地市/组件台数或额定非法/缺目录/坏类型 → 报错指明字段
 """
 from __future__ import annotations
 
@@ -26,6 +26,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from new_energy.solar.history import city_centers
 from new_energy.solar.pipeline import DEFAULT_DATA_DIR, _compute, _parse_request, run_solar
 
 logging.disable(logging.INFO)
@@ -130,12 +131,20 @@ def case_defaults() -> None:
     assert cfg["data_dir"] == DEFAULT_DATA_DIR, "缺省 data_dir 应为服务端默认数据目录"
     assert list(cfg["city_configs"]) == [CITY], "缺省 city_configs 应为儋州"
     assert cfg["loss_factor"] == 1.0 and cfg["albedo"] == 0.2 and cfg["output_city_power"] is True
+    # latitude/longitude 缺省 → 归属表地市格点中心
+    payload = copy.deepcopy(CONFIG)
+    for field in ("latitude", "longitude"):
+        payload["city_configs"][0].pop(field)
+    omitted = _parse_request(payload)
+    center = city_centers(omitted["assignment_file"])[CITY]
+    got = omitted["city_configs"][CITY]
+    assert (got["latitude"], got["longitude"]) == center, "缺省经纬度应为地市格点中心"
     # 文件与 dict 两种形态解析等价
     assert _parse_request(FIXTURES / "solar_danzhou.json") == _parse_request(CONFIG), "文件/dict 解析结果不一致"
 
 
 def case_invalid_requests() -> None:
-    """12 项非法请求均抛 ValueError 且报错指明问题字段。
+    """13 项非法请求均抛 ValueError 且报错指明问题字段。
 
     Returns:
         None
@@ -167,8 +176,9 @@ def case_invalid_requests() -> None:
     expect_error(lambda p: p["city_configs"][0].__setitem__("city", "460999_不存在市"), "归属表之外")
     expect_error(lambda p: p["city_configs"].append(copy.deepcopy(p["city_configs"][0])), "重复")
     expect_error(lambda p: p["city_configs"][0].__setitem__("capacity_mw", -5), "capacity_mw 必须为正")
-    expect_error(lambda p: p["city_configs"][0]["components"][0].__setitem__("capacity_share", 0.5), "合计应为 1")
-    expect_error(lambda p: p["city_configs"][0].pop("latitude"), "缺少必填字段 latitude")
+    expect_error(lambda p: p["city_configs"][0]["components"][0].__setitem__("count", 0), "count 必须是正整数")
+    expect_error(lambda p: p["city_configs"][0]["components"][0].__setitem__("rated_power_mw", -1), "rated_power_mw 必须为正")
+    expect_error(lambda p: p["city_configs"][0].__setitem__("latitude", 999), "latitude 必须在")
     expect_error(lambda p: p.__setitem__("albedo", "abc"), "albedo")
     expect_error(lambda p: p["scenario"].__setitem__("year", "2025"), "scenario.year")
     expect_error(lambda p: p.__setitem__("data_dir", "Z:/no_such_dir"), "solar")

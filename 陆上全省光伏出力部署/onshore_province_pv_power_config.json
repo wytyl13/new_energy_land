@@ -1,0 +1,26 @@
+{
+  "input": {"project_root": "D:/PycharmProjects/EPPEI/05hainan", "assignment_file": "海南地市分区/海南共同80格点_地市归属.csv", "weather_grid_dir": "hainan_era5_grid_csv"},
+  "scenario": {"year": 2024, "resource_year_type": "正常资源年", "generate_solar_scenario": true},
+  "loss_factor": 1.0,
+  "city_configs": {
+    "460100_海口市": {"capacity_mw": 764.168, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]},
+    "460200_三亚市": {"capacity_mw": 764.168, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]},
+    "460400_儋州市": {"capacity_mw": 955.21, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]},
+    "469001_五指山市": {"capacity_mw": 95.521, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]},
+    "469002_琼海市": {"capacity_mw": 573.126, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]},
+    "469005_文昌市": {"capacity_mw": 1146.252, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]},
+    "469006_万宁市": {"capacity_mw": 955.21, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]},
+    "469007_东方市": {"capacity_mw": 859.689, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]},
+    "469021_定安县": {"capacity_mw": 286.563, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]},
+    "469022_屯昌县": {"capacity_mw": 191.042, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]},
+    "469023_澄迈县": {"capacity_mw": 668.647, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]},
+    "469024_临高县": {"capacity_mw": 668.647, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]},
+    "469025_白沙黎族自治县": {"capacity_mw": 143.2815, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]},
+    "469026_昌江黎族自治县": {"capacity_mw": 525.3655, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]},
+    "469027_乐东黎族自治县": {"capacity_mw": 573.126, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]},
+    "469028_陵水黎族自治县": {"capacity_mw": 382.084, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]},
+    "469029_保亭黎族苗族自治县": {"capacity_mw": 95.521, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]},
+    "469030_琼中黎族苗族自治县": {"capacity_mw": 95.521, "modules": [{"model": "A_PERC", "count": 1, "rated_power_mw": 1, "tilt_deg": 18, "azimuth_deg": 180, "noct_c": 45, "gamma_p_per_c": -0.004, "efficiency": 1}]}
+  },
+  "output_dir": "D:/PycharmProjects/EPPEI/05hainan/陆上全省光伏出力部署/输出"
+}
