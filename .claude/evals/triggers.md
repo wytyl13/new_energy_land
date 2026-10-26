@@ -39,6 +39,9 @@
 | 接口加字段文档同步了吗 | maintain-project-docs | build-fastapi-service |
 | README 跟着改吗 | maintain-project-docs | change-code |
 | 哪些文档要更新 | maintain-project-docs | manage-skills |
+| 画个算法流程图 | maintain-project-docs | write-python-code |
+| 维度流转怎么写 | maintain-project-docs | write-math-formula |
+| 照参考图出一张网络图 | maintain-project-docs | write-python-code |
 | 注释别那么啰嗦 | CLAUDE.md | write-python-code |
 | 文档措辞改平实 | CLAUDE.md | maintain-project-docs |
 | AI 味太重重写 | CLAUDE.md | maintain-project-docs |

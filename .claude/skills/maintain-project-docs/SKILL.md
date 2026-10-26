@@ -1,6 +1,6 @@
 ---
 name: maintain-project-docs
-description: 新建或修改 DESIGN.md、PLAN.md、DECISIONS.md、API.md、README.md，或代码改动后同步文档时使用。当用户说建个 DESIGN.md、DESIGN 章节怎么排、重构设计写哪、重写 README、算法全流程怎么写、收尾把 README 定稿、接口加字段文档同步了吗、README 跟着改吗、哪些文档要更新、进度能直接更新吗时使用。判断一条规则该放哪用 manage-skills。
+description: 新建或修改 DESIGN.md、PLAN.md、DECISIONS.md、API.md、README.md，画算法流程图、写维度流转，或代码改动后同步文档时使用。当用户说建个 DESIGN.md、画个算法流程图、维度流转怎么写、DESIGN 章节怎么排、重构设计写哪、重写 README、算法全流程怎么写、收尾把 README 定稿、接口加字段文档同步了吗、README 跟着改吗、哪些文档要更新、进度能直接更新吗时使用。判断一条规则该放哪用 manage-skills。
 ---
 # 维护项目文档
 
@@ -17,6 +17,7 @@ description: 新建或修改 DESIGN.md、PLAN.md、DECISIONS.md、API.md、READM
 
 | 任务 | 读 |
 | :--- | :--- |
-| 写或改 DESIGN.md | reference/design.md |
+| 写或改 DESIGN.md | reference/design.md，范例 examples/algo-design.md |
+| 画算法流程图 | reference/design.md 流程图一节 + scripts/make_flowchart.py |
 | 新建 PLAN.md、DECISIONS.md、README.md、API.md | reference/templates.md |
 | 代码改了要同步文档、写 `[n]` 引用 | reference/sync.md |
