@@ -2,11 +2,11 @@
 
 ## 当前状态
 - 正在做：skills 重构已完成，等用户核对
-- 下一步：处理待决定 Q-01，再按待办逐项另开任务
+- 下一步：按待办逐项另开任务
 - 阻塞：无
 
 ## 待决定
-- Q-01 原 skill `api-json-format` 里定稿的四块格式（config 下发/提交、categories、曲线、views）和"改格式时"一节，对应的是 datasets/jobs 接口和 `service/defaults.py`、`tests/test_api_upload.py`，本项目没有这些。去处：A 搬到它所属项目的 API.md / B 本项目 API.md 只写本项目接口，这部分不要，待定。原文见提交 afb7cd1 的 `.claude/skills/api-json-format/SKILL.md`
+- Q-01 原 skill `api-json-format` 里定稿格式的去处 → D-27
 
 ## 步骤
 | 编号 | 步骤 | 状态 | 验证结果 |
