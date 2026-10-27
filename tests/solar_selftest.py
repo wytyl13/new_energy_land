@@ -5,7 +5,7 @@
 @Author  : weiyutao
 @File    : solar_selftest.py
 
-光伏 pipeline 唯一入口自测：统一 JSON（文件/dict）校验 + 全流程回归。
+光伏业务层唯一入口自测：统一 JSON（文件/dict）校验 + 全流程回归。
 
 运行（仓库根目录）:
     python -m tests.solar_selftest
@@ -14,6 +14,7 @@
     1 全流程回归   儋州单市，三类辐照度场景与区域出力均与冻结基准容差一致 + 公共入口双份返回核对
     2 默认值       缺 data_dir/city_configs 时填服务端默认（儋州）；文件与 dict 解析等价
     3 非法请求     缺字段/未知字段/重复地市/越界地市/组件台数或额定非法/缺目录/坏类型 → 报错指明字段
+    4 区域单元     单个未命中归属表的单元按传入数据全部格点列聚合，经纬度缺省取格点均值
 """
 from __future__ import annotations
 
@@ -26,8 +27,9 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from new_energy.solar.history import city_centers
-from new_energy.solar.pipeline import DEFAULT_DATA_DIR, _compute, _parse_request, run_solar
+from biz.assignment import city_centers
+from biz.request import DEFAULT_DATA_DIR, parse_request
+from biz.runner import compute, run
 
 logging.disable(logging.INFO)
 
@@ -88,7 +90,7 @@ def case_full_regression() -> None:
         None
     """
     # 内部三景全量比对（场景 + 出力，与冻结基准一致）
-    result = _compute(_parse_request(CONFIG))
+    result = compute("solar", parse_request(CONFIG, "solar"))
     for case in CASES:
         base_scene = pd.read_csv(BASELINE / "scenario" / f"BASE_{case}_辐照度场景.csv", encoding="utf-8-sig")
         _assert_close(
@@ -97,15 +99,16 @@ def case_full_regression() -> None:
             f"{case} 生成辐照度",
         )
         base_power = pd.read_csv(BASELINE / "power" / f"BASE_{case}_光伏出力.csv", encoding="utf-8-sig", index_col=0)
-        table = result.power[case]
-        assert len(table) == len(base_power) == 8760, f"{case} 出力行数应为 8760，实际 {len(table)}"
-        for col in base_power.columns:
-            _assert_close(table[col].to_numpy(float), base_power[col].to_numpy(float), f"{case} {col}")
-    power = result.power["正常资源年"]["区域总出力_MW"]
-    assert power.between(0, 1e4).all(), "区域出力超出合理范围"
+        pr = result.power[case]
+        assert len(pr.index) == len(base_power) == 8760, f"{case} 出力行数应为 8760，实际 {len(pr.index)}"
+        _assert_close(pr.city_power[CITY], base_power[f"{CITY}_总出力_MW"].to_numpy(float), f"{case} {CITY}_总出力_MW")
+        _assert_close(pr.region_power_mw, base_power["区域总出力_MW"].to_numpy(float), f"{case} 区域总出力_MW")
+        _assert_close(pr.region_power_pu, base_power["区域总出力_pu"].to_numpy(float), f"{case} 区域总出力_pu")
+    power = result.power["正常资源年"].region_power_mw
+    assert ((power >= 0) & (power <= 1e4)).all(), "区域出力超出合理范围"
 
     # 公共入口：dict 直传 → 写 CSV + 返回 JSON 双份核对
-    resp = run_solar(CONFIG)
+    resp = run("solar", CONFIG)
     b = pd.read_csv(resp["output_file"], encoding="utf-8-sig")
     assert len(b) == 8760 and b.columns[0] == "时间", f"CSV 应为 8760 行、首列时间，实际 {b.shape} {b.columns[0]}"
     assert resp["cities"] == [CITY], "返回 cities 应只有儋州"
@@ -124,10 +127,13 @@ def case_defaults() -> None:
         None
     """
     # 缺 data_dir/city_configs → 填服务端默认（儋州区域），不跑计算
-    cfg = _parse_request({
-        "scenario": {"year": 2025, "resource_year_type": "正常资源年"},
-        "output_dir": "Z:/tmp",
-    })
+    cfg = parse_request(
+        {
+            "scenario": {"year": 2025, "resource_year_type": "正常资源年"},
+            "output_dir": "Z:/tmp",
+        },
+        "solar",
+    )
     assert cfg["data_dir"] == DEFAULT_DATA_DIR, "缺省 data_dir 应为服务端默认数据目录"
     assert list(cfg["city_configs"]) == [CITY], "缺省 city_configs 应为儋州"
     assert cfg["loss_factor"] == 1.0 and cfg["albedo"] == 0.2 and cfg["output_city_power"] is True
@@ -135,12 +141,12 @@ def case_defaults() -> None:
     payload = copy.deepcopy(CONFIG)
     for field in ("latitude", "longitude"):
         payload["city_configs"][0].pop(field)
-    omitted = _parse_request(payload)
+    omitted = parse_request(payload, "solar")
     center = city_centers(omitted["assignment_file"])[CITY]
     got = omitted["city_configs"][CITY]
     assert (got["latitude"], got["longitude"]) == center, "缺省经纬度应为地市格点中心"
     # 文件与 dict 两种形态解析等价
-    assert _parse_request(FIXTURES / "solar_danzhou.json") == _parse_request(CONFIG), "文件/dict 解析结果不一致"
+    assert parse_request(FIXTURES / "solar_danzhou.json", "solar") == parse_request(CONFIG, "solar"), "文件/dict 解析结果不一致"
 
 
 def case_invalid_requests() -> None:
@@ -163,7 +169,7 @@ def case_invalid_requests() -> None:
         payload = copy.deepcopy(CONFIG)
         mutate(payload)
         try:
-            _parse_request(payload)
+            parse_request(payload, "solar")
         except ValueError as exc:
             assert needle in str(exc), f"报错未指明 {needle}: {exc}"
         else:
@@ -173,7 +179,13 @@ def case_invalid_requests() -> None:
     expect_error(lambda p: p.pop("scenario"), "scenario")
     expect_error(lambda p: p.__setitem__("foo", 1), "foo")
     expect_error(lambda p: p.__setitem__("evaluate", True), "evaluate")
-    expect_error(lambda p: p["city_configs"][0].__setitem__("city", "460999_不存在市"), "归属表之外")
+
+    # 单元名匹配规则：多单元含未命中 → 报错（单个未命中是合法区域单元，见用例 4）
+    def _two_units_one_invalid(p: dict) -> None:
+        p["city_configs"].append(copy.deepcopy(p["city_configs"][0]))
+        p["city_configs"][0]["city"] = "460999_不存在市"
+
+    expect_error(_two_units_one_invalid, "归属表之外")
     expect_error(lambda p: p["city_configs"].append(copy.deepcopy(p["city_configs"][0])), "重复")
     expect_error(lambda p: p["city_configs"][0].__setitem__("capacity_mw", -5), "capacity_mw 必须为正")
     expect_error(lambda p: p["city_configs"][0]["components"][0].__setitem__("count", 0), "count 必须是正整数")
@@ -182,6 +194,31 @@ def case_invalid_requests() -> None:
     expect_error(lambda p: p.__setitem__("albedo", "abc"), "albedo")
     expect_error(lambda p: p["scenario"].__setitem__("year", "2025"), "scenario.year")
     expect_error(lambda p: p.__setitem__("data_dir", "Z:/no_such_dir"), "solar")
+
+
+def case_direct_unit() -> None:
+    """单个未命中归属表的单元：全部格点列聚合，经纬度缺省取数据格点坐标均值。
+
+    Returns:
+        None
+    """
+    payload = copy.deepcopy(CONFIG)
+    payload["city_configs"][0]["city"] = "框选区域B"
+    for field in ("latitude", "longitude"):
+        payload["city_configs"][0].pop(field)
+    payload["variable_prefixes"] = {"solar": "irradiance_w_m2", "temperature": "temperature_2m_k"}
+
+    cfg = parse_request(payload, "solar")
+    got = cfg["city_configs"]["框选区域B"]
+    assert abs(got["latitude"] - 19.125) <= 1e-9 and abs(got["longitude"] - 109.875) <= 1e-9, \
+        f"缺省经纬度应为数据格点坐标均值，实际 ({got['latitude']}, {got['longitude']})"
+
+    resp = run("solar", payload)
+    assert resp["cities"] == ["框选区域B"], "返回 cities 应只有该区域单元"
+    table = resp["power_table"]
+    assert "框选区域B_总出力_MW" in table, "缺少区域单元出力列"
+    assert np.allclose(np.asarray(table["区域总出力_MW"]), np.asarray(table["框选区域B_总出力_MW"])), \
+        "区域总出力应等于该单元出力"
 
 
 def main() -> None:
@@ -193,6 +230,7 @@ def main() -> None:
     _check("1 全流程回归（儋州，约1分钟）", case_full_regression)
     _check("2 默认值与解析等价", case_defaults)
     _check("3 非法请求校验", case_invalid_requests)
+    _check("4 区域单元聚合", case_direct_unit)
 
     print(f"\n{'用例':<28}结果  耗时")
     print("-" * 56)

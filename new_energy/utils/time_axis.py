@@ -41,7 +41,7 @@ def beijing_aligned(series: pd.Series, source_years: tuple[int, ...]) -> pd.Seri
     """把 UTC 口径的地市序列对齐到连续小时北京时间轴并删闰日（风电/光伏共用）。
 
     Args:
-        series (pd.Series): UTC 时间索引的地市序列（common.city_weather 返回）。
+        series (pd.Series): UTC 时间索引的地市序列（biz.assignment 返回）。
         source_years (tuple[int, ...]): 历史数据覆盖的年份范围。
 
     Returns:

@@ -24,6 +24,7 @@ description: 从零新建项目或仓库时使用，定义开工要建的文档�
   requirements.txt 或 environment.yml
   src/ 或 <包名>/    按分层组织
   data/              输入数据（不进 git 的写进 .gitignore，并在 README 说明）
+  scripts/           数据工具脚本（生成或加工 data/ 的数据，独立于算法包）
   docs/ref/          原始资料，只读
   tests/             最小可运行检查
 ```

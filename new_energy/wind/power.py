@@ -6,8 +6,12 @@
 @File    : power.py
 
 步6：风电物理出力（轮毂高度切变、空气密度、分段立方功率曲线、省市汇总）。
+
+只返回结果对象；输出表组装（列集、列名、行序）在业务层 biz.runner（D-45）。
 """
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
@@ -16,6 +20,17 @@ RHO_REF = 1.225
 GAMMA = 0.0065
 GRAVITY = 9.80665
 R_D = 287.05
+
+
+@dataclass
+class PowerResult:
+    """风电出力结果对象：各地市出力、全省出力 MW/pu、容量加权省风速。"""
+
+    index: pd.DatetimeIndex                 # 输出年整点小时轴
+    city_power: dict[str, np.ndarray]       # 地市键 → 逐小时出力 MW
+    province_power_mw: np.ndarray           # 全省出力 MW
+    province_power_pu: np.ndarray           # 全省出力 pu
+    province_wind_speed_m_s: np.ndarray     # 容量加权省风速 m/s
 
 
 def turbine_fraction(
@@ -92,9 +107,8 @@ def compute_power(
     city_configs: dict,
     target_index: pd.DatetimeIndex,
     loss_factor: float = 1.0,
-    output_city_power: bool = True,
-) -> dict[str, pd.DataFrame]:
-    """逐资源年汇总全省出力表，列结构与旧版 onshore_wind_power 输出一致。
+) -> dict[str, PowerResult]:
+    """逐资源年计算全省出力结果对象（表组装在业务层）。
 
     Args:
         scenarios (dict[str, dict[str, pd.Series]]): 资源年类型 → 地市键 → 风速场景。
@@ -103,10 +117,9 @@ def compute_power(
         city_configs (dict): 全部地市配置。
         target_index (pd.DatetimeIndex): 输出年时间轴。
         loss_factor (float): 综合损耗系数。
-        output_city_power (bool): 是否在输出表中附带各地市出力列。
 
     Returns:
-        dict[str, pd.DataFrame]: 资源年类型 → 全省出力表。
+        dict[str, PowerResult]: 资源年类型 → 全省出力结果对象。
     """
     capacities = {city: float(cfg["capacity_mw"]) for city, cfg in city_configs.items()}
     total_capacity = sum(capacities.values())
@@ -123,16 +136,11 @@ def compute_power(
             )
             power += city_power[city]
             wind_weighted += float(weights.get(city, 0.0)) * scenario.to_numpy(float)
-        out = pd.DataFrame(
-            {
-                "time": target_index,
-                "province_wind_speed_m_s": wind_weighted,
-                "province_power_mw": power,
-                "province_power_pu": power / total_capacity,
-            }
+        result[case] = PowerResult(
+            index=target_index,
+            city_power=city_power,
+            province_power_mw=power,
+            province_power_pu=power / total_capacity,
+            province_wind_speed_m_s=wind_weighted,
         )
-        if output_city_power:
-            for city, values in city_power.items():
-                out[f"{city}_power_mw"] = values
-        result[case] = out
     return result

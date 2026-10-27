@@ -5,7 +5,7 @@
 @Author  : weiyutao
 @File    : wind_run_selftest.py
 
-风电 pipeline 唯一入口自测：统一 JSON（文件/dict）校验 + 全流程回归。
+风电业务层唯一入口自测：统一 JSON（文件/dict）校验 + 全流程回归。
 
 运行（仓库根目录）:
     python -m tests.wind_run_selftest
@@ -15,6 +15,7 @@
     2 单市一致性 dict 形态只传海口，海口列与基准一致，province 列等于本市列
     3 默认值     缺 data_dir/city_configs 时填服务端默认；文件与 dict 解析等价
     4 非法请求   缺字段/未知字段/重复地市/坏类型/缺目录/越界地市/负容量/配置文件不存在 → 报错指明字段
+    5 区域单元   单个未命中归属表的单元按传入数据全部格点列聚合；声明前缀不符报错
 """
 from __future__ import annotations
 
@@ -27,7 +28,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from new_energy.wind.pipeline import DEFAULT_DATA_DIR, _parse_request, run_wind
+from biz.request import DEFAULT_DATA_DIR, parse_request
+from biz.runner import run
 
 logging.disable(logging.INFO)
 
@@ -89,7 +91,7 @@ def case_full_province() -> None:
     Returns:
         None
     """
-    response = run_wind(FIXTURES / "wind_full_province.json")  # 文件路径形态
+    response = run("wind", FIXTURES / "wind_full_province.json")  # 文件路径形态
     a = pd.read_csv(BASELINE, encoding="utf-8-sig")
     b = pd.read_csv(response["output_file"], encoding="utf-8-sig")
     assert a.shape == b.shape == (8784, 22), f"规模不符: 基准{a.shape} vs 实际{b.shape}"
@@ -124,7 +126,7 @@ def case_single_city() -> None:
         None
     """
     fixture = _load_fixture("wind_single_city.json")
-    response = run_wind(fixture)  # dict 形态
+    response = run("wind", fixture)  # dict 形态
     a = pd.read_csv(BASELINE, encoding="utf-8-sig")
     b = pd.read_csv(response["output_file"], encoding="utf-8-sig")
     assert b.shape == (8784, 5), f"单市输出应为 8784×5，实际 {b.shape}"
@@ -145,16 +147,19 @@ def case_defaults() -> None:
         None
     """
     # 缺 data_dir/city_configs → 填服务端默认（不跑计算，只核对解析结果）
-    cfg = _parse_request({
-        "scenario": {"year": 2024, "resource_year_type": "正常资源年"},
-        "output_dir": "Z:/tmp",
-    })
+    cfg = parse_request(
+        {
+            "scenario": {"year": 2024, "resource_year_type": "正常资源年"},
+            "output_dir": "Z:/tmp",
+        },
+        "wind",
+    )
     assert cfg["data_dir"] == DEFAULT_DATA_DIR, "缺省 data_dir 应为服务端默认数据目录"
     assert len(cfg["city_configs"]) == 18, "缺省 city_configs 应为全省 18 地市"
     assert cfg["loss_factor"] == 1.0 and cfg["output_city_power"] is True and cfg["evaluate"] is False
     # 文件与 dict 两种形态解析等价
     fixture = _load_fixture("wind_single_city.json")
-    assert _parse_request(FIXTURES / "wind_single_city.json") == _parse_request(fixture), "文件/dict 解析结果不一致"
+    assert parse_request(FIXTURES / "wind_single_city.json", "wind") == parse_request(fixture, "wind"), "文件/dict 解析结果不一致"
 
 
 def case_invalid_requests() -> None:
@@ -178,7 +183,7 @@ def case_invalid_requests() -> None:
         payload = copy.deepcopy(base)
         mutate(payload)
         try:
-            _parse_request(payload)
+            parse_request(payload, "wind")
         except ValueError as exc:
             assert needle in str(exc), f"报错未指明 {needle}: {exc}"
         else:
@@ -190,7 +195,13 @@ def case_invalid_requests() -> None:
     expect_error(lambda p: p["scenario"].__setitem__("resource_year_type", "好年景"), "resource_year_type 必须是")
     expect_error(lambda p: p.__setitem__("foo", 1), "foo")
     expect_error(lambda p: p["city_configs"].append(copy.deepcopy(p["city_configs"][0])), "重复")
-    expect_error(lambda p: p["city_configs"][0].__setitem__("city", "460999_不存在市"), "归属表之外")
+
+    # 单元名匹配规则：多单元含未命中 → 报错（单个未命中是合法区域单元，见用例 5）
+    def _two_units_one_invalid(p: dict) -> None:
+        p["city_configs"].append(copy.deepcopy(p["city_configs"][0]))
+        p["city_configs"][0]["city"] = "460999_不存在市"
+
+    expect_error(_two_units_one_invalid, "归属表之外")
     expect_error(lambda p: p["city_configs"][0].__setitem__("capacity_mw", -5), "capacity_mw 必须为正")
     expect_error(lambda p: p["city_configs"][0]["turbines"][0].__setitem__("rated_power_mw", 0), "rated_power_mw 必须为正")
     expect_error(lambda p: p.__setitem__("loss_factor", "abc"), "loss_factor")
@@ -199,11 +210,43 @@ def case_invalid_requests() -> None:
 
     # 文件形态：配置文件不存在
     try:
-        run_wind(Path("Z:/no_such_config.json"))
+        run("wind", Path("Z:/no_such_config.json"))
     except ValueError as exc:
         assert "配置文件不存在" in str(exc)
     else:
         raise AssertionError("未抛错（期望 配置文件不存在）")
+
+
+def case_direct_unit() -> None:
+    """单个未命中归属表的单元：按传入数据全部声明前缀格点列聚合，province 列等于该单元列。
+
+    Returns:
+        None
+    """
+    fixture = _load_fixture("wind_single_city.json")
+    fixture["city_configs"][0]["city"] = "框选区域A"
+    fixture["variable_prefixes"] = {
+        "wind": "wind_speed_100m",
+        "temperature": "temperature_2m_k",
+        "pressure": "surface_pressure_pa",
+    }
+    response = run("wind", fixture)
+    b = pd.read_csv(response["output_file"], encoding="utf-8-sig")
+    unit_col = "框选区域A_power_mw"
+    assert b.shape == (8784, 5), f"单区域输出应为 8784×5，实际 {b.shape}"
+    assert unit_col in b.columns, "缺少区域单元出力列"
+    assert np.array_equal(b["province_power_mw"].to_numpy(), b[unit_col].to_numpy()), "province 列应等于区域单元列"
+    assert response["cities"] == ["框选区域A"], "返回 cities 应只有该区域单元"
+
+    # 声明前缀与数据不符（10m/100m 混装防线）：读取首个年份文件时即报错
+    bad = copy.deepcopy(fixture)
+    bad["variable_prefixes"] = {"wind": "wind_speed_10m"}
+    try:
+        run("wind", bad)
+    except ValueError as exc:
+        assert "前缀" in str(exc), f"报错未指明前缀: {exc}"
+    else:
+        raise AssertionError("未抛错（期望前缀校验报错）")
 
 
 def main() -> None:
@@ -216,6 +259,7 @@ def main() -> None:
     _check("2 单市一致性", case_single_city)
     _check("3 默认值与解析等价", case_defaults)
     _check("4 非法请求校验", case_invalid_requests)
+    _check("5 区域单元聚合", case_direct_unit)
 
     print(f"\n{'用例':<28}结果  耗时")
     print("-" * 56)

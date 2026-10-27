@@ -12,7 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..common.time_axis import no_feb29
+from ..utils.time_axis import no_feb29
 
 
 def classify_years(

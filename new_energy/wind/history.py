@@ -7,13 +7,13 @@
 
 步1：地市风速历史构建（UTC+8 对齐、删闰日、完整小时校验）。
 
-时间轴工具（year_index / no_feb29）已提到 common.time_axis，风电/光伏共用。
+时间轴工具（year_index / no_feb29）已提到 utils.time_axis，风电/光伏共用。
 """
 from __future__ import annotations
 
 import pandas as pd
 
-from ..common.time_axis import beijing_aligned
+from ..utils.time_axis import beijing_aligned
 
 
 def build_history(
@@ -23,7 +23,7 @@ def build_history(
     """把格点风速序列对齐到连续小时时间轴并删闰日。
 
     Args:
-        city_wind (pd.Series): common.city_weather 返回的地市风速序列（UTC 时间索引）。
+        city_wind (pd.Series): biz.assignment 返回的地市风速序列（UTC 时间索引）。
         source_years (tuple[int, ...]): 历史数据覆盖的年份范围。
 
     Returns:

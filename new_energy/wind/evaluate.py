@@ -12,8 +12,8 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..common.request import RESOURCE_YEAR_TYPES
-from ..common.time_axis import no_feb29
+from ..constants import RESOURCE_YEAR_TYPES
+from ..utils.time_axis import no_feb29
 
 AUTOCORR_LAGS = [1, 2, 3, 6, 12, 24, 48, 72, 168]
 

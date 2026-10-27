@@ -21,8 +21,8 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import ConstantKernel, RBF, WhiteKernel
 from sklearn.preprocessing import StandardScaler
 
-from ..common.request import RANDOM_SEED, RESOURCE_YEAR_TYPES
-from ..common.time_axis import no_feb29, year_index
+from ..constants import RANDOM_SEED, RESOURCE_YEAR_TYPES
+from ..utils.time_axis import no_feb29, year_index
 from .events import contiguous_runs
 
 GPR_SAMPLE_SIZE = 800

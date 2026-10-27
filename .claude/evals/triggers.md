@@ -24,7 +24,7 @@
 | 新建 evaluate.py | write-python-code | bootstrap-project |
 | 建个工具脚本 | write-python-code | bootstrap-project |
 | 文件头格式补上 | write-python-code | maintain-project-docs |
-| common 和 wind 依赖理一下 | design-module-layering | change-code |
+| utils 和 wind 依赖理一下 | design-module-layering | change-code |
 | 新模块放哪层 | design-module-layering | bootstrap-project |
 | pipeline 能反向 import 吗 | design-module-layering | change-code |
 | 改 CLAUDE.md 分工段 | manage-skills | maintain-project-docs |
@@ -77,3 +77,7 @@
 | 这个 skill 要不要拆 | manage-skills | maintain-project-docs |
 | 两个 skill 合并一下 | manage-skills | maintain-project-docs |
 | 改一下 skill 的 description | manage-skills | maintain-project-docs |
+| 算法和业务要不要拆开 | design-module-layering | plan-project |
+| reader 放包内还是包外 | design-module-layering | bootstrap-project |
+| 业务包叫 biz 还是 service | design-module-layering | bootstrap-project |
+| biz 里加个入参校验 | change-code | design-module-layering |

@@ -12,7 +12,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..common.request import RESOURCE_YEAR_TYPES
+from ..constants import RESOURCE_YEAR_TYPES
 
 
 def contiguous_runs(mask: np.ndarray) -> list[tuple[int, int]]:

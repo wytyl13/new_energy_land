@@ -1,16 +1,15 @@
 # Python
+.vscode/
 __pycache__/
+.ipynb_checkpoints/
 *.py[cod]
+.refactor_baseline/
 
-# 原始气象数据（1.9G，不进库）
-data/
-
-# 运行/测试产物
+data/*
+!data/全国格点地市归属.csv
 tests/output/
 陆上全省风电出力部署/输出/
+陆上全省光伏出力部署/输出/
 
-# 系统
 .DS_Store
 Thumbs.db
-
-陆上全省光伏出力部署/输出/

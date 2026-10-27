@@ -5,10 +5,10 @@
 @Author  : weiyutao
 @File    : wind_router.py
 
-风电路由：POST /api/wind/run，同步执行，透传统一 JSON 给 pipeline 唯一入口。
+风电路由：POST /api/wind/run，同步执行，透传统一 JSON 给业务层唯一入口。
 
-请求体不走 Pydantic 模型：校验与默认值填充是 pipeline 入口的职责
-（skill `service-api` 第 3.3 条透传例外），服务层不重复校验。
+请求体不走 Pydantic 模型：校验与默认值填充是业务层入口的职责
+（skill `build-fastapi-service` 的透传例外），服务层不重复校验。
 """
 from __future__ import annotations
 
@@ -17,7 +17,7 @@ import asyncio
 from fastapi import APIRouter, Body
 
 from api.response import make_response
-from new_energy.wind.pipeline import run_wind
+from biz.runner import run
 
 router = APIRouter(prefix="/api/wind", tags=["Wind"])
 
@@ -28,5 +28,5 @@ async def run_wind_scenario(
 ) -> dict:
     """【风电出力场景计算】同步阻塞：单市几十秒、全省约 4 分钟；成功返回结果 JSON（含 power_table）。
 """
-    result = await asyncio.to_thread(run_wind, payload)
+    result = await asyncio.to_thread(run, "wind", payload)
     return make_response(success=True, data=result)

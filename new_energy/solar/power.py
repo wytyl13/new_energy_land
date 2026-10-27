@@ -9,22 +9,35 @@
 
 多地市、多组件：每个地市可配多种组件（倾角/方位角/温度特性不同），按容量占比
 叠加后得到地市总出力，再汇总区域总出力。温度和气压用训练年逐小时气候平均值。
+只返回结果对象；输出表组装（列集、列名、行序）在业务层 biz.runner（D-45）。
 """
 from __future__ import annotations
+
+from dataclasses import dataclass
 
 import numpy as np
 import pandas as pd
 
-from ..common.time_axis import no_feb29, year_index
+from ..utils.time_axis import no_feb29, year_index
 
 CLIMATOLOGY_INDEX = year_index(2025)[no_feb29(year_index(2025))]  # 8760 小时非闰年轴
+
+
+@dataclass
+class PowerResult:
+    """光伏出力结果对象：各地市出力、区域总出力 MW/pu。"""
+
+    index: pd.DatetimeIndex                 # 时间轴（场景轴或输出年，见调用方）
+    city_power: dict[str, np.ndarray]       # 地市键 → 逐小时出力 MW
+    region_power_mw: np.ndarray             # 区域总出力 MW
+    region_power_pu: np.ndarray             # 区域总出力 pu
 
 
 def weather_climatology(series: pd.Series, years: tuple[int, ...]) -> pd.Series:
     """把逐年温度/气压序列按位置平均成 8760 小时气候态（删闰日、UTC+8）。
 
     Args:
-        series (pd.Series): common.city_weather 返回的地市序列（UTC 时间索引，多年拼接）。
+        series (pd.Series): biz.assignment 返回的地市序列（UTC 时间索引，多年拼接）。
         years (tuple[int, ...]): 参与平均的年份。
 
     Returns:
@@ -82,9 +95,8 @@ def compute_power(
     target_index: pd.DatetimeIndex,
     loss_factor: float = 1.0,
     albedo: float = 0.2,
-    output_city_power: bool = True,
-) -> dict[str, pd.DataFrame]:
-    """把三类辐照度场景转为区域光伏出力表。
+) -> dict[str, PowerResult]:
+    """把三类辐照度场景转为区域光伏出力结果对象（表组装在业务层）。
 
     Args:
         scenarios (dict[str, dict[str, pd.Series]]): 资源年类型 → 地市键 → 辐照度场景。
@@ -93,16 +105,15 @@ def compute_power(
         target_index (pd.DatetimeIndex): 与场景对齐的时间轴（8760 小时）。
         loss_factor (float): 汇集、逆变及线路等综合损耗系数。
         albedo (float): 地面反照率。
-        output_city_power (bool): 出力表是否附带各地市出力列。
 
     Returns:
-        dict[str, pd.DataFrame]: 资源年类型 → 出力表（时间 + 各地市总出力 + 区域总出力 MW/pu）。
+        dict[str, PowerResult]: 资源年类型 → 出力结果对象（各地市出力 + 区域总出力 MW/pu）。
     """
     total_cap = sum(float(cfg["capacity_mw"]) for cfg in city_configs.values())
-    power: dict[str, pd.DataFrame] = {}
+    power: dict[str, PowerResult] = {}
     for case, city_scenarios in scenarios.items():
-        table = pd.DataFrame(index=target_index)
         region_total = np.zeros(len(target_index))
+        city_power: dict[str, np.ndarray] = {}
         for city, cfg in city_configs.items():
             ghi = city_scenarios[city].to_numpy(float)
             temp_c = temp_by_city[city].to_numpy(float) - 273.15
@@ -125,11 +136,12 @@ def compute_power(
                     * np.clip(g / 1000 * (1 + comp["gamma_p_per_c"] * (tc - 25)), 0, 1.2)
                 )
                 city_total += p
-            if output_city_power:
-                table[f"{city}_总出力_MW"] = city_total
+            city_power[city] = city_total
             region_total += city_total
-        table["区域总出力_MW"] = region_total
-        table["区域总出力_pu"] = region_total / total_cap
-        table.insert(0, "时间", target_index)
-        power[case] = table
+        power[case] = PowerResult(
+            index=target_index,
+            city_power=city_power,
+            region_power_mw=region_total,
+            region_power_pu=region_total / total_cap,
+        )
     return power

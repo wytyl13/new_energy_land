@@ -19,8 +19,8 @@ from sklearn.gaussian_process import GaussianProcessRegressor
 from sklearn.gaussian_process.kernels import ConstantKernel, RBF, WhiteKernel
 from sklearn.preprocessing import StandardScaler
 
-from ..common.request import RANDOM_SEED, RESOURCE_YEAR_TYPES
-from ..common.time_axis import no_feb29, year_index
+from ..constants import RANDOM_SEED, RESOURCE_YEAR_TYPES
+from ..utils.time_axis import no_feb29, year_index
 from .events import EVENT_IDEAL_THRESHOLD
 
 DAYLIGHT_THRESHOLD = 50.0  # 理想辐照度超过该值视为有效白天，其他时段生成辐照度置零（W/m2）

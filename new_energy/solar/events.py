@@ -15,7 +15,7 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..common.request import RESOURCE_YEAR_TYPES
+from ..constants import RESOURCE_YEAR_TYPES
 
 EVENT_IDEAL_THRESHOLD = 200.0  # 核心日照时段阈值：仅理想辐照度超过该值时识别事件（W/m2）
 KT_QUANTILE = 0.10            # 晴空指数分位阈值

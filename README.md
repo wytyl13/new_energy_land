@@ -57,7 +57,7 @@ git push origin --delete feature/algo-update
 ```powershell
 # 仓库根目录执行；配置模板见 .refactor_baseline/config.json（全省）与 tests/fixtures/wind_minimal.json（最简，全走默认）
 conda activate newenergy_dgzy
-python -m new_energy.wind.run_wind tests/fixtures/wind_minimal.json
+python run.py wind tests/fixtures/wind_minimal.json
 ```
 
 > 输出说明见 [# 风电 / 输出](#输出)。单市约 20 秒，全省约 4 分钟。
@@ -67,7 +67,7 @@ python -m new_energy.wind.run_wind tests/fixtures/wind_minimal.json
 ```powershell
 # 仓库根目录执行；配置模板见 tests/fixtures/solar_danzhou.json
 conda activate newenergy_dgzy
-python -m new_energy.solar.run_solar tests/fixtures/solar_danzhou.json
+python run.py solar tests/fixtures/solar_danzhou.json
 ```
 
 > 输出说明见 [# 光伏 / 输出](#输出-1)。儋州单市约 1 分钟。
@@ -93,30 +93,32 @@ python -m tests.solar_selftest      # 光伏：儋州全流程回归约 1 分钟
 
 # 架构
 
-> 算法包 `new_energy` 分层，依赖单向、禁止反向 import；pipeline 是对外唯一入口，CLI 与 HTTP 同路。
+> 三层单向依赖 `api → biz → new_energy`：算法层只做计算（内存序列进、结果对象出，不碰文件），业务层负责校验、取数、表组装与写文件，服务层与 CLI 均走业务层唯一入口。
 
 ```
-入口层   wind/run_wind.py     CLI（本地调试）：配置 JSON 文件路径 → pipeline
-         solar/run_solar.py   同上（光伏）
-         （HTTP 服务层直接传 JSON dict 给 pipeline，不经 CLI）
+CLI      run.py              python run.py wind|solar 配置.json（本地调试，薄壳）
+服务层   api/                HTTP 透传：JSON dict → biz.runner.run，不重复校验
   ↓
-组织层   wind/pipeline.py     唯一入口 run_wind：校验+默认值 → 全流程 → 写 CSV → 返回结果 JSON
-         solar/pipeline.py    同上（光伏）run_solar
+业务层   biz/                唯一入口 run(kind, source)：校验 → 取数 → 算法调用 → 表组装 → 写 CSV + 结果 JSON
+         request.py           统一 JSON 装载与字段校验、默认路径
+         assignment.py        格点 CSV + 归属表 → 各地市气象序列；历史年份解析
+         runner.py            全流程组织、冻结列序表组装、双份写出
   ↓
-单元层   wind/{history,classify,events,generate,power,evaluate}.py
-         solar/{history,classify,events,generate,power}.py
+算法层   new_energy/         只做计算，全程内存：
+         wind|solar/pipeline.py  compute()：内存序列 → 结果对象（场景 + PowerResult）
+         {history,classify,events,generate,power,evaluate}.py
                               每个计算步骤一个模块，互不知道彼此
-  ↓
-公共层   common/              格点读取与历史年份解析（city_weather）、时间轴（time_axis）、统一请求解析（request）
+         utils/time_axis.py   逐年小时时间轴与闰日处理
+         constants.py         冻结随机种子与资源年类型
 ```
 
-| 模块                                                                                                | 职责                                              |
-| :-------------------------------------------------------------------------------------------------- | :------------------------------------------------ |
-| [common/city_weather.py](new_energy/common/city_weather.py)                                          | 格点 CSV + 归属表 → 各地市气象序列；历史年份解析 |
-| [common/time_axis.py](new_energy/common/time_axis.py)                                                | 逐年小时时间轴与闰日处理                          |
-| [common/request.py](new_energy/common/request.py)                                                    | 统一 JSON 装载与字段校验、默认路径                |
-| [wind/run_wind.py](new_energy/wind/run_wind.py) / [solar/run_solar.py](new_energy/solar/run_solar.py) | CLI 入口（本地调试，薄壳）                        |
-| [wind/pipeline.py](new_energy/wind/pipeline.py) / [solar/pipeline.py](new_energy/solar/pipeline.py)   | 唯一入口：校验+默认值+全流程+双份返回             |
+| 模块                                                                    | 职责                                              |
+| :---------------------------------------------------------------------- | :------------------------------------------------ |
+| [run.py](run.py)                                                        | CLI 入口（本地调试，薄壳）                        |
+| [biz/request.py](biz/request.py)                                        | 统一 JSON 装载与字段校验、默认路径                |
+| [biz/assignment.py](biz/assignment.py)                                  | 格点 CSV + 归属表 → 各地市气象序列；历史年份解析 |
+| [biz/runner.py](biz/runner.py)                                          | 唯一入口：校验+取数+算法调用+表组装+双份写出     |
+| [new_energy/utils/time_axis.py](new_energy/utils/time_axis.py)          | 逐年小时时间轴与闰日处理                          |
 
 > 单元层各模块的职责见下方风电/光伏全流程表。
 
@@ -126,18 +128,18 @@ python -m tests.solar_selftest      # 光伏：儋州全流程回归约 1 分钟
 
 > 统一 JSON 校验+默认值 → 格点风速 → 地市历史 → 资源年分类 → 事件库 → 三类场景 → 物理出力 → 出力 CSV + 结果 JSON。历史年份解析规则见下方"输入"节。
 
-| 步骤           | 输入                                                                   | 中间处理                                                                                                                | 输出                                                                              | 模块                                                |
-| :------------- | :--------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------- | :-------------------------------------------------- |
-| 0 校验与默认值 | 统一 JSON（文件路径或 dict）                                           | 必填/类型/未知字段校验，重复地市与归属表核对；`data_dir`/`city_configs` 缺省填服务端默认                            | 规范化配置（内存）                                                                | [pipeline.py](new_energy/wind/pipeline.py)           |
-| 1 读风速格点   | `data_dir`（含 wind/temperature/pressure 子目录）+ 格点归属表 [1][1] | 按地市严格边界内格点求均值，逐年拼接（UTC 口径）                                                                        | {地市键: 逐年风速 Series}                                                         | [city_weather.py](new_energy/common/city_weather.py) |
-| 2 历史构建     | 步骤 1 的地市风速                                                      | UTC+8 转北京时间、对齐连续小时并插值补齐、删 2 月 29 日                                                                 | 地市风速历史序列（默认 2000–2025）                                               | [history.py](new_energy/wind/history.py)             |
-| 3 资源年分类   | 步骤 2 的历史（训练年，默认 2000–2024）                               | 逐年平均风速立方，按 P25/P75 分位分三类                                                                                 | 每年一行：year、立方均值、资源年类型                                              | [classify.py](new_energy/wind/classify.py)           |
-| 4 事件库与标准 | 训练年历史 + 步骤 3 分类                                               | P10/P90 阈值提取持续 ≥3h 的低风/大风事件；统计分年景分月年均次数                                                       | 事件表 + 事件序列字典 + 年均次数标准表                                            | [events.py](new_energy/wind/events.py)               |
-| 5 场景生成     | 训练年历史 + 步骤 3/4 结果                                             | GPR 拟合均值 + AR(1) 残差采样 → 逐月水平/软分位数校准 → 按标准插入极端事件（坡度过渡）→ 全局经验分位数映射、均值回拉 | 三类资源年 × 8760 小时风速场景（场景轴年，默认 2025）+ 插入方案 + 残差 lag1 系数 | [generate.py](new_energy/wind/generate.py)           |
-| 6 时间轴重排   | 步骤 5 的场景 + 输出年份                                               | 场景轴年份重排到输出年份，闰年补 2 月 29 日（时间插值）                                                                 | 输出年份轴的三类场景                                                              | [pipeline.py](new_energy/wind/pipeline.py)           |
-| 7 物理出力     | 步骤 6 场景 + 输出年温度/气压格点[1][1] + 地市机组配置                 | 轮毂高度切变外推、温度气压修正空气密度、分段立方功率曲线；多机型按容量比例叠加后等比缩放到配置装机                      | 地市出力、全省出力表（容量加权平均风速、出力 MW/pu）                              | [power.py](new_energy/wind/power.py)                 |
-| 8 写文件与返回 | 步骤 7 的全省出力表                                                    | 按`scenario.resource_year_type` 选一类写出 CSV；同时组装结果 JSON                                                     | 出力 CSV + 结果 JSON（见下方输出节）                                              | [pipeline.py](new_energy/wind/pipeline.py)           |
-| 可选 评估      | 训练年历史 + 步骤 3/5 结果                                             | 场景与历史同类年对比：均值/立方均值误差、持续曲线 nRMSE、自相关、爬坡分位数、事件统计                                   | 指标表（内存返回，配置`evaluate: true` 开启）                                   | [evaluate.py](new_energy/wind/evaluate.py)           |
+| 步骤           | 输入                                                                   | 中间处理                                                                                                                | 输出                                                                              | 模块                                               |
+| :------------- | :--------------------------------------------------------------------- | :---------------------------------------------------------------------------------------------------------------------- | :-------------------------------------------------------------------------------- | :------------------------------------------------- |
+| 0 校验与默认值 | 统一 JSON（文件路径或 dict）                                           | 必填/类型/未知字段校验，重复地市与归属表核对；`data_dir`/`city_configs` 缺省填服务端默认                            | 规范化配置（内存）                                                                | [biz/request.py](biz/request.py)                    |
+| 1 读风速格点   | `data_dir`（含 wind/temperature/pressure 子目录）+ 格点归属表 [1][1] | 按地市严格边界内格点求均值，逐年拼接（UTC 口径）                                                                        | {地市键: 逐年风速 Series}                                                         | [biz/assignment.py](biz/assignment.py)              |
+| 2 历史构建     | 步骤 1 的地市风速                                                      | UTC+8 转北京时间、对齐连续小时并插值补齐、删 2 月 29 日                                                                 | 地市风速历史序列（默认 2000–2025）                                               | [history.py](new_energy/wind/history.py)            |
+| 3 资源年分类   | 步骤 2 的历史（训练年，默认 2000–2024）                               | 逐年平均风速立方，按 P25/P75 分位分三类                                                                                 | 每年一行：year、立方均值、资源年类型                                              | [classify.py](new_energy/wind/classify.py)          |
+| 4 事件库与标准 | 训练年历史 + 步骤 3 分类                                               | P10/P90 阈值提取持续 ≥3h 的低风/大风事件；统计分年景分月年均次数                                                       | 事件表 + 事件序列字典 + 年均次数标准表                                            | [events.py](new_energy/wind/events.py)              |
+| 5 场景生成     | 训练年历史 + 步骤 3/4 结果                                             | GPR 拟合均值 + AR(1) 残差采样 → 逐月水平/软分位数校准 → 按标准插入极端事件（坡度过渡）→ 全局经验分位数映射、均值回拉 | 三类资源年 × 8760 小时风速场景（场景轴年，默认 2025）+ 插入方案 + 残差 lag1 系数 | [generate.py](new_energy/wind/generate.py)          |
+| 6 时间轴重排   | 步骤 5 的场景 + 输出年份                                               | 场景轴年份重排到输出年份，闰年补 2 月 29 日（时间插值）                                                                 | 输出年份轴的三类场景                                                              | [pipeline.py](new_energy/wind/pipeline.py)          |
+| 7 物理出力     | 步骤 6 场景 + 输出年温度/气压格点[1][1] + 地市机组配置                 | 轮毂高度切变外推、温度气压修正空气密度、分段立方功率曲线；多机型按容量比例叠加后等比缩放到配置装机                      | 地市出力、全省出力表（容量加权平均风速、出力 MW/pu）                              | [power.py](new_energy/wind/power.py)                |
+| 8 写文件与返回 | 步骤 7 的全省出力表                                                    | 按`scenario.resource_year_type` 选一类写出 CSV；同时组装结果 JSON                                                     | 出力 CSV + 结果 JSON（见下方输出节）                                              | [biz/runner.py](biz/runner.py)                      |
+| 可选 评估      | 训练年历史 + 步骤 3/5 结果                                             | 场景与历史同类年对比：均值/立方均值误差、持续曲线 nRMSE、自相关、爬坡分位数、事件统计                                   | 指标表（内存返回，配置`evaluate: true` 开启）                                   | [evaluate.py](new_energy/wind/evaluate.py)          |
 
 ## 输入
 
@@ -154,22 +156,23 @@ data_dir/                              # 缺省用服务端 data/hainan_era5_gri
     └── hainan_pressure_{输出年}.csv
 ```
 
-格点 CSV 通用格式：`time` 列（UTC 口径）+ 各格点数值列；格点列名形如 `前缀_lat_纬度_lon_经度`，前缀按类型为 `wind_speed_100m` / `irradiance_w_m2` / `temperature_2m_k` / `surface_pressure_pa`；格点列须覆盖归属表[1][1]全部严格边界内格点。缺年份文件、缺格点列 → `ValueError` 并指明文件/地市。
+格点 CSV 通用格式：`time` 列（UTC 口径）+ 各格点数值列；格点列名形如 `前缀_lat_纬度_lon_经度`，前缀按类型为 `wind_speed_100m` / `irradiance_w_m2` / `temperature_2m_k` / `surface_pressure_pa`；命中归属表的单元，格点列须覆盖该单元全部严格边界内格点。缺年份文件、缺格点列、前缀不符 → `ValueError` 并指明文件/单元/坐标。
 
 **配置项**（统一 JSON，`city_configs` 为数组格式，对象含 `city` 字段）：
 
-| 键                                                  | 必填 | 默认                   | 含义                                               |
-| :-------------------------------------------------- | :--- | :--------------------- | :------------------------------------------------- |
-| `scenario.year` / `scenario.resource_year_type` | 是   | —                     | 输出年份、写出哪一类资源年                         |
-| `output_dir`                                      | 是   | —                     | 出力 CSV 写入目录                                  |
-| `city_configs`                                    | 否   | 全省 18 地市机组[2][2] | 各地市装机与机型配置；重复地市报错，可只传部分地市 |
-| `data_dir`                                        | 否   | 服务端数据目录         | 原始气象数据目录（含 wind/temperature/pressure）   |
-| `assignment_file`                                 | 否   | 服务端归属表[1][1]     | 格点归属表                                         |
-| `loss_factor`                                     | 否   | 1.0                    | 综合损耗系数                                       |
-| `output_city_power`                               | 否   | true                   | 输出表是否附带各地市出力列                         |
-| `evaluate`                                        | 否   | false                  | 是否计算场景评估指标                               |
+| 键                                                  | 必填 | 默认                   | 含义                                                       |
+| :-------------------------------------------------- | :--- | :--------------------- | :--------------------------------------------------------- |
+| `scenario.year` / `scenario.resource_year_type` | 是   | —                     | 输出年份、写出哪一类资源年                                 |
+| `output_dir`                                      | 是   | —                     | 出力 CSV 写入目录                                          |
+| `city_configs`                                    | 否   | 全省 18 地市机组[2][2] | 各计算单元装机与机型配置；重复单元报错，可只传部分单元     |
+| `data_dir`                                        | 否   | 服务端数据目录         | 原始气象数据目录（含 wind/temperature/pressure）           |
+| `assignment_file`                                 | 否   | 服务端归属表[1][1]     | 格点归属表（全国表，可换传海南旧表）                       |
+| `variable_prefixes`                               | 否   | 服务端前缀常量         | `{kind: 变量前缀}`，声明数据列名前缀（防 10m/100m 混装） |
+| `loss_factor`                                     | 否   | 1.0                    | 综合损耗系数                                               |
+| `output_city_power`                               | 否   | true                   | 输出表是否附带各地市出力列                                 |
+| `evaluate`                                        | 否   | false                  | 是否计算场景评估指标                                       |
 
-**计算范围**：范围只由 `city_configs` 的键决定（传谁算谁），聚合列（`province_*`）= 所传地市之和/容量加权，列名不随范围变；返回 JSON 的 `cities` 字段标明本次实际计算范围。
+**计算单元与匹配规则**（不区分省/市/区域，D-29）：单元名全部命中归属表 → 各单元格点由归属表给出；多单元且任一未命中 → `ValueError`；恰好 1 个单元未命中 → 合法自定义区域，格点 = 传入数据中该类型声明前缀的全部格点列，单元名作输出列键。单元名键格式 = 行政区划码_城市名（DataV `areas_v3` 口径，如 `460100_海口市`）。范围只由 `city_configs` 的键决定（传谁算谁），聚合列（`province_*`）= 所传单元之和/容量加权，列名不随范围变；返回 JSON 的 `cities` 字段标明本次实际计算范围。
 
 机型参数（`turbines` 列表的字段）：
 
@@ -184,7 +187,7 @@ data_dir/                              # 缺省用服务端 data/hainan_era5_gri
 
 多机型出力按 `count × rated_power_mw` 占比叠加后，等比缩放使合计等于该地市 `capacity_mw`。
 
-**算法内部常数**（不进配置，代码内冻结，改动即改结果）：分类分位 P25/P75、事件分位 P10/P90、事件最短持续 3h、校准强度、随机种子。**历史年份**：期望窗口为服务端常量 `DEFAULT_YEARS`（[common/request.py](new_energy/common/request.py)，默认 2000–2025 两端含），实际使用范围=窗口∩数据目录实际年份，运行时自动解析（连续段校验、逐年行数校验闰 8784/平 8760、年份数下限 12）。
+**算法内部常数**（不进配置，代码内冻结，改动即改结果）：分类分位 P25/P75、事件分位 P10/P90、事件最短持续 3h、校准强度、随机种子。**历史年份**：期望窗口为服务端常量 `DEFAULT_YEARS`（[biz/assignment.py](biz/assignment.py)，默认 2000–2025 两端含），实际使用范围=窗口∩数据目录实际年份，运行时自动解析（连续段校验、逐年行数校验闰 8784/平 8760、年份数下限 12）。
 
 ## 输出
 
@@ -207,14 +210,14 @@ data_dir/                              # 缺省用服务端 data/hainan_era5_gri
 
 | 步骤                       | 输入                                                           | 中间处理                                                                                                                                                               | 输出                                                     | 模块                                                                                  |
 | :------------------------- | :------------------------------------------------------------- | :--------------------------------------------------------------------------------------------------------------------------------------------------------------------- | :------------------------------------------------------- | :------------------------------------------------------------------------------------ |
-| 0 校验与默认值             | 统一 JSON（文件路径或 dict）                                   | 必填/类型/未知字段校验，组件`count` 须为正整数、`rated_power_mw` 须为正；`data_dir`/`city_configs` 缺省填服务端默认                                            | 规范化配置（内存）                                       | [pipeline.py](new_energy/solar/pipeline.py)                                            |
-| 1 读辐照度格点             | `data_dir`（含 solar/temperature 子目录）+ 格点归属表 [1][1] | 按地市严格边界内格点求均值，逐年拼接（UTC 口径）                                                                                                                       | {地市键: 逐年辐照度 Series}                              | [city_weather.py](new_energy/common/city_weather.py)                                   |
+| 0 校验与默认值             | 统一 JSON（文件路径或 dict）                                   | 必填/类型/未知字段校验，组件`count` 须为正整数、`rated_power_mw` 须为正；`data_dir`/`city_configs` 缺省填服务端默认                                            | 规范化配置（内存）                                       | [biz/request.py](biz/request.py)                                                       |
+| 1 读辐照度格点             | `data_dir`（含 solar/temperature 子目录）+ 格点归属表 [1][1] | 按地市严格边界内格点求均值，逐年拼接（UTC 口径）                                                                                                                       | {地市键: 逐年辐照度 Series}                              | [biz/assignment.py](biz/assignment.py)                                                 |
 | 2 历史与理想辐照度         | 步骤 1 的地市辐照度                                            | UTC+8 转北京时间、对齐连续小时并插值补齐、删 2 月 29 日；按地市格点平均经纬度计算水平面理想辐照度                                                                      | 辐照度/理想辐照度历史（默认 2000–2025）                 | [history.py](new_energy/solar/history.py) / [generate.py](new_energy/solar/generate.py) |
 | 3 资源年分类               | 步骤 2 的历史（训练年，默认 2000–2024）                       | 逐年累计辐照量，按 P25/P75 分位分三类                                                                                                                                  | 每年一行：year、累计辐照量、资源年类型                   | [classify.py](new_energy/solar/classify.py)                                            |
 | 4 事件库与标准             | 训练年历史 + 理想辐照度 + 步骤 3 分类                          | 核心日照时段（理想>200 W/m2）识别晴空指数 Kt P10、持续 ≥3h 的低辐照事件；统计分年景分月年均次数                                                                       | 事件表 + 事件序列字典 + 年均次数标准表                   | [events.py](new_energy/solar/events.py)                                                |
 | 5 场景生成                 | 训练年历史 + 理想辐照度 + 步骤 3/4 结果                        | 理想-实际差作为辐照损失，GPR 拟合季节/日变化 + 日内 AR(1) 残差抽样 → 45% 温和分位数校准 → 按标准插入低辐照事件（边界 3h 渐变）→ 月累计能量校正（系数限 0.70–1.60） | 三类资源年 × 8760 小时辐照度场景（场景轴年，默认 2025） | [generate.py](new_energy/solar/generate.py)                                            |
 | 6 物理出力                 | 步骤 5 场景 + 训练年温度气候态 + 地市组件配置                  | 水平面→组件倾斜面辐照度（POA）、NOCT 组件温度、功率温度系数；多组件按容量占比叠加                                                                                     | 地市出力、区域出力表（MW/pu）                            | [power.py](new_energy/solar/power.py)                                                  |
-| 7 时间轴重排、写文件与返回 | 步骤 6 出力表 + 输出年份                                       | 场景轴年份重排到输出年份，闰年补 2 月 29 日（时间插值）；按`scenario.resource_year_type` 选一类写出 CSV；同时组装结果 JSON                                           | 出力 CSV + 结果 JSON（见下方输出节）                     | [pipeline.py](new_energy/solar/pipeline.py)                                            |
+| 7 时间轴重排、写文件与返回 | 步骤 6 出力表 + 输出年份                                       | 场景轴年份重排到输出年份，闰年补 2 月 29 日（时间插值）；按`scenario.resource_year_type` 选一类写出 CSV；同时组装结果 JSON                                           | 出力 CSV + 结果 JSON（见下方输出节）                     | [pipeline.py](new_energy/solar/pipeline.py) / [biz/runner.py](biz/runner.py)            |
 
 ## 输入
 
@@ -231,13 +234,13 @@ data_dir/                              # 缺省用服务端 data/hainan_era5_gri
 
 **配置项**（与风电共用骨架，公共键见 [# 风电 / 输入](#输入) 配置表；差异如下）：
 
-| 键               | 必填 | 默认               | 含义                               |
-| :--------------- | :--- | :----------------- | :--------------------------------- |
-| `city_configs` | 否   | 儋州区域机组[3][3] | 各地市装机与组件配置；重复地市报错 |
-| `loss_factor`  | 否   | 1.0                | 汇集、逆变及线路等综合损耗系数     |
-| `albedo`       | 否   | 0.2                | 地面反照率                         |
+| 键               | 必填 | 默认               | 含义                                   |
+| :--------------- | :--- | :----------------- | :------------------------------------- |
+| `city_configs` | 否   | 儋州区域机组[3][3] | 各计算单元装机与组件配置；重复单元报错 |
+| `loss_factor`  | 否   | 1.0                | 汇集、逆变及线路等综合损耗系数         |
+| `albedo`       | 否   | 0.2                | 地面反照率                             |
 
-**计算范围**：与风电同规则，范围只由 `city_configs` 的键决定，`区域总出力_*` = 所配置地市之和。
+**计算范围**：与风电同规则（单元名匹配规则见 [# 风电 / 输入](#输入)），范围只由 `city_configs` 的键决定，`区域总出力_*` = 所配置单元之和；未命中归属表的单单元经纬度缺省取传入数据格点坐标均值（`region_center`）。
 
 组件参数（`components` 列表的字段）：
 
@@ -418,12 +421,12 @@ data_dir/                              # 缺省用服务端 data/hainan_era5_gri
 }
 ```
 
-## pipeline 直调（CLI 与 HTTP 同路）
+## 业务层直调（CLI 与 HTTP 同路）
 
 ```python
-from new_energy.wind.pipeline import run_wind   # 光伏: from new_energy.solar.pipeline import run_solar
+from biz.runner import run
 
-response = run_wind(payload_dict)   # 或传 JSON 文件路径: run_wind(Path("config.json"))
+response = run("wind", payload_dict)   # 光伏: run("solar", ...)；或传 JSON 文件路径: run("wind", Path("config.json"))
 # response 即上方 return 中 data 的内容（去掉 success/message/timestamp 包装）
 ```
 
@@ -431,8 +434,8 @@ response = run_wind(payload_dict)   # 或传 JSON 文件路径: run_wind(Path("c
 
 <!-- 数据文件 -->
 
-[1]: ./data/海南地市分区/海南共同80格点_地市归属.csv
+[1]: ./data/全国格点地市归属.csv
 <!-- 服务端默认机组配置 -->
 
-[2]: ./new_energy/wind/default_city_configs.json
-[3]: ./new_energy/solar/default_city_configs.json
+[2]: ./biz/default_city_configs_wind.json
+[3]: ./biz/default_city_configs_solar.json
