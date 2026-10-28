@@ -17,6 +17,7 @@ from pathlib import Path
 from typing import NamedTuple
 
 from .constants import DEFAULT_YEARS, MIN_HISTORY_YEARS
+from .grids import find_grid_file
 
 logger = logging.getLogger(__name__)
 
@@ -35,11 +36,11 @@ class YearsPlan(NamedTuple):
 
 
 def _file_years(grid_dir: Path, kind: str) -> set[int]:
-    """扫 kind 子目录，返回实际存在的年份集合。"""
-    pattern = re.compile(rf"hainan_{kind}_(\d{{4}})\.csv")
+    """扫 kind 子目录（*_{kind}_{year}.csv，区域前缀任意），返回实际存在的年份集合。"""
+    pattern = re.compile(rf".+_{kind}_(\d{{4}})\.csv")
     return {
         int(match.group(1))
-        for path in (Path(grid_dir) / kind).glob(f"hainan_{kind}_*.csv")
+        for path in (Path(grid_dir) / kind).glob(f"*_{kind}_*.csv")
         if (match := pattern.fullmatch(path.name))
     }
 
@@ -86,7 +87,7 @@ def resolve_years(
     for year in best:
         expected = 8784 if calendar.isleap(year) else 8760
         for kind in kinds:
-            path = Path(grid_dir) / kind / f"hainan_{kind}_{year}.csv"
+            path = find_grid_file(Path(grid_dir) / kind, kind, year)
             if (rows := _row_count(path)) != expected:
                 raise ValueError(f"{path} 数据行数 {rows} ≠ {year} 年应有的 {expected} 行，数据不完整")
 

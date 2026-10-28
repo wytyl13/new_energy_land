@@ -206,12 +206,13 @@ def case_invalid_requests() -> None:
     expect_error(lambda p: p.__setitem__("foo", 1), "foo")
     expect_error(lambda p: p.__setitem__("evaluate", True), "evaluate")
 
-    # 单元名匹配规则：多单元含未命中 → 报错（单个未命中是合法区域单元，见用例 4）
-    def _two_units_one_invalid(p: dict) -> None:
+    # 单元名匹配规则（D-53）：多单元全部未命中 → 报错；部分未命中 → 跳过（见用例 4 的对照）
+    def _two_units_both_invalid(p: dict) -> None:
         p["city_configs"].append(copy.deepcopy(p["city_configs"][0]))
         p["city_configs"][0]["city"] = "460999_不存在市"
+        p["city_configs"][1]["city"] = "460998_也不存在市"
 
-    expect_error(_two_units_one_invalid, "归属表之外")
+    expect_error(_two_units_both_invalid, "归属表之外")
     expect_error(lambda p: p["city_configs"].append(copy.deepcopy(p["city_configs"][0])), "重复")
     expect_error(lambda p: p["city_configs"][0].__setitem__("capacity_mw", -5), "capacity_mw 必须为正")
     expect_error(lambda p: p["city_configs"][0]["components"][0].__setitem__("count", 0), "count 必须是正整数")

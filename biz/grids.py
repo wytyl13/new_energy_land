@@ -62,10 +62,21 @@ def _match_column(
     )
 
 
+def find_grid_file(kind_dir: Path, kind: str, year: int) -> Path:
+    """按 *_{kind}_{year}.csv 找某年数据文件（区域前缀任意，hainan_/beijing_ 均可）；
+    同一年多个匹配（多区域文件混放）报错。"""
+    files = sorted(kind_dir.glob(f"*_{kind}_{year}.csv"))
+    if not files:
+        raise ValueError(f"数据文件不存在: {kind_dir / f'*_{kind}_{year}.csv'}")
+    if len(files) > 1:
+        raise ValueError(f"{kind_dir} 同一年有多个 {kind} 文件，须只留一个区域: {[f.name for f in files]}")
+    return files[0]
+
+
 def _first_grid_file(kind_dir: Path, kind: str) -> Path:
     """kind 子目录按文件名排序最前的年份文件（region_center 专用：格点集年份间恒定；
     single_unit 的列清单取实际读取的首个年份文件，不吃窗口外的老文件）。"""
-    files = sorted(kind_dir.glob(f"hainan_{kind}_*.csv"))
+    files = sorted(kind_dir.glob(f"*_{kind}_*.csv"))
     if not files:
         raise ValueError(f"数据目录无 {kind} 文件: {kind_dir}")
     return files[0]
@@ -108,7 +119,7 @@ def load_city_series(
     units: set[str] | None = None,
     prefixes: dict[str, str] | None = None,
 ) -> dict[str, pd.Series]:
-    """读 kind 逐年格点 CSV（grid_dir/kind/hainan_{kind}_{year}.csv）→ 单元键 → 逐年拼接序列。
+    """读 kind 逐年格点 CSV（grid_dir/kind/*_{kind}_{year}.csv，区域前缀任意）→ 单元键 → 逐年拼接序列。
 
     命中归属表的单元按归属表坐标取列聚合（格点均值）；single_unit（未命中
     单元）取数据中声明前缀的全部格点列（assignment_csv 忽略）。units 只聚合
@@ -125,15 +136,13 @@ def load_city_series(
     else:
         coords_by_city = {}
         single_columns = _single_unit_columns(
-            Path(grid_dir) / kind / f"hainan_{kind}_{years[0]}.csv", prefix, single_unit)
+            find_grid_file(Path(grid_dir) / kind, kind, years[0]), prefix, single_unit)
 
     pieces: dict[str, list[pd.Series]] = {key: [] for key in coords_by_city}
     if single_unit is not None:
         pieces[single_unit] = []
     for year in years:
-        path = Path(grid_dir) / kind / f"hainan_{kind}_{year}.csv"
-        if not path.exists():
-            raise ValueError(f"数据文件不存在: {path}")
+        path = find_grid_file(Path(grid_dir) / kind, kind, year)
         logger.info("读取格点文件: %s (%d 个单元)", path.relative_to(grid_dir), len(pieces))
         data = pd.read_csv(path, encoding=ENC)
         time = pd.to_datetime(data["time"], errors="coerce")
