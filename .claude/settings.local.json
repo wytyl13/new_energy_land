@@ -1,0 +1,15 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(sleep 50; cat \"/c/Users/weiyutao/AppData/Local/Temp/claude/c--Users-weiyutao-20260823-regional-power-system-optimization/ec388dbd-4b23-481f-baa0-c91f34bbd22c/tasks/bl2q676um.output\" 2>/dev/null | tail -4; cd \"/c/Users/weiyutao/20260823/regional_power_system_optimization/1、优化模型0918\" && ls -t gurobi_2026*.log | head -1)",
+      "Read(//c/Users/weiyutao/AppData/Local/Temp/claude/c--Users-weiyutao-20260823-regional-power-system-optimization/ec388dbd-4b23-481f-baa0-c91f34bbd22c/tasks/**)",
+      "Bash(PYTHONIOENCODING=utf-8 /c/Users/weiyutao/.conda/envs/power_opt/python.exe -m model.units.pumped_storage)",
+      "Bash(PYTHONIOENCODING=utf-8 /c/Users/weiyutao/.conda/envs/power_opt/python.exe -m model.units.electrochemical)",
+      "Bash(PYTHONIOENCODING=utf-8 /c/Users/weiyutao/.conda/envs/power_opt/python.exe -m model.context)",
+      "Bash(GRB_LICENSE_FILE=/c/gurobi1300/win64/bin/gurobi.lic PYTHONIOENCODING=utf-8 /c/Users/weiyutao/.conda/envs/power_opt/python.exe solve.py)",
+      "Bash(GRB_LICENSE_FILE=/c/gurobi1300/win64/bin/gurobi.lic PYTHONIOENCODING=utf-8 /c/Users/weiyutao/.conda/envs/power_opt/python.exe compare.py 24 325055517.8569)",
+      "Bash(python -c ' *)",
+      "Bash(py -c \"import openpyxl;print\\('ok'\\)\")"
+    ]
+  }
+}

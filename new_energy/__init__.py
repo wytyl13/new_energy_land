@@ -5,5 +5,6 @@
 @Author  : weiyutao
 @File    : __init__.py
 
-新能源出力核心算法包：wind 风电、solar 光伏。
+新能源出力核心算法包：按阶段平铺（history/classify/events/generate/power/evaluate），
+模型入口 WindPowerModel/SolarPowerModel 在 pipeline，配置类在 config（D-46）。
 """

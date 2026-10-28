@@ -11,7 +11,7 @@
     python -m tests.wind_run_selftest
 
 用例：
-    1 全省回归   文件路径形态跑全流程，输出与冻结基准容差一致（四项核对）+ 返回 JSON 结构核对
+    1 单市回归   文件路径形态跑海口全流程，输出与冻结基准容差一致（四项核对）+ 返回 JSON 结构核对
     2 单市一致性 dict 形态只传海口，海口列与基准一致，province 列等于本市列
     3 默认值     缺 data_dir/city_configs 时填服务端默认；文件与 dict 解析等价
     4 非法请求   缺字段/未知字段/重复地市/坏类型/缺目录/越界地市/负容量/配置文件不存在 → 报错指明字段
@@ -28,8 +28,8 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from biz.request import DEFAULT_DATA_DIR, parse_request
-from biz.runner import run
+from biz.runner import Runner, run
+from biz.schema import DEFAULT_DATA_DIR, Schema
 
 logging.disable(logging.INFO)
 
@@ -85,27 +85,30 @@ def _load_fixture(name: str) -> dict:
     return json.loads((FIXTURES / name).read_text(encoding="utf-8"))
 
 
-def case_full_province() -> None:
-    """全省回归：18 地市出力对冻结基准（总量≤1e-6、逐元素≤1e-4），返回 JSON 结构核对。
+def case_full_regression() -> None:
+    """单市（海口）回归：出力对冻结基准（总量≤1e-6、逐元素≤1e-4），返回 JSON 结构核对。
+
+    基准（D-49）＝当前默认口径（全国归属表 + 现行风格点数据）重生成并冻结的单市输出，
+    自测按轻量版只跑海口，不再每次全省 18 地市。
 
     Returns:
         None
     """
-    response = run("wind", FIXTURES / "wind_full_province.json")  # 文件路径形态
+    response = run("wind", FIXTURES / "wind_single_city.json")  # 文件路径形态
     a = pd.read_csv(BASELINE, encoding="utf-8-sig")
     b = pd.read_csv(response["output_file"], encoding="utf-8-sig")
-    assert a.shape == b.shape == (8784, 22), f"规模不符: 基准{a.shape} vs 实际{b.shape}"
+    assert a.shape == b.shape == (8784, 5), f"规模不符: 基准{a.shape} vs 实际{b.shape}"
     assert list(a.columns) == list(b.columns), "列集或列序不一致"
     total_rel = abs(a["province_power_mw"].sum() - b["province_power_mw"].sum()) / a["province_power_mw"].sum()
     assert total_rel <= 1e-6, f"总量相对偏差 {total_rel:.3e} 超过 1e-6"
     rel = _rel_max(a, b)
     assert rel <= 1e-4, f"逐元素最大相对偏差 {rel:.3e} 超过 1e-4"
-    assert b["province_power_mw"].between(0, 1e5).all(), "全省出力超出合理范围"
+    assert b["province_power_mw"].between(0, 1e5).all(), "单市出力超出合理范围"
 
     # 返回 JSON 结构核对（规模/数值）
     assert response["scenario"] == {"year": 2024, "resource_year_type": "正常资源年"}
-    assert len(response["cities"]) == 18, "本次计算范围应为 18 地市"
-    assert abs(response["total_capacity_mw"] - 375.215) <= 1e-6, "总装机与默认配置不符"
+    assert response["cities"] == ["460100_海口市"], "本次计算范围应只有海口"
+    assert abs(response["total_capacity_mw"] - 22.29) <= 1e-6, "总装机与默认配置不符"
     table = response["power_table"]
     assert list(table) == list(b.columns), "power_table 列集应与 CSV 一致"
     lengths = {len(v) for v in table.values()}
@@ -120,7 +123,7 @@ def case_full_province() -> None:
 
 
 def case_single_city() -> None:
-    """单市（海口）出力与全省基准的海口列一致，province 列等于本市列。
+    """单市（海口）dict 形态出力与基准的海口列一致，province 列等于本市列。
 
     Returns:
         None
@@ -147,23 +150,22 @@ def case_defaults() -> None:
         None
     """
     # 缺 data_dir/city_configs → 填服务端默认（不跑计算，只核对解析结果）
-    cfg = parse_request(
+    req = Runner("wind").request(
         {
             "scenario": {"year": 2024, "resource_year_type": "正常资源年"},
             "output_dir": "Z:/tmp",
-        },
-        "wind",
+        }
     )
-    assert cfg["data_dir"] == DEFAULT_DATA_DIR, "缺省 data_dir 应为服务端默认数据目录"
-    assert len(cfg["city_configs"]) == 18, "缺省 city_configs 应为全省 18 地市"
-    assert cfg["loss_factor"] == 1.0 and cfg["output_city_power"] is True and cfg["evaluate"] is False
+    assert req.data_dir == DEFAULT_DATA_DIR, "缺省 data_dir 应为服务端默认数据目录"
+    assert len(req.city_configs) == 18, "缺省 city_configs 应为全省 18 地市"
+    assert req.loss_factor == 1.0 and req.output_city_power is True and req.evaluate is False
     # 文件与 dict 两种形态解析等价
     fixture = _load_fixture("wind_single_city.json")
-    assert parse_request(FIXTURES / "wind_single_city.json", "wind") == parse_request(fixture, "wind"), "文件/dict 解析结果不一致"
+    assert Schema("wind")(FIXTURES / "wind_single_city.json") == Schema("wind")(fixture), "文件/dict 解析结果不一致"
 
 
 def case_invalid_requests() -> None:
-    """12 项非法请求与配置文件不存在均抛 ValueError 且报错指明原因。
+    """12 项非法请求与配置文件不存在均报错且指明原因（未知/缺必填 → TypeError，其余 ValueError）。
 
     Returns:
         None
@@ -171,7 +173,7 @@ def case_invalid_requests() -> None:
     base = _load_fixture("wind_single_city.json")
 
     def expect_error(mutate, needle: str) -> None:
-        """按 mutate 改动请求后期望 _parse_request 报错含 needle。
+        """按 mutate 改动请求后期望 Runner.request 报错含 needle。
 
         Args:
             mutate (Callable): 对 payload 的改动函数。
@@ -183,15 +185,15 @@ def case_invalid_requests() -> None:
         payload = copy.deepcopy(base)
         mutate(payload)
         try:
-            parse_request(payload, "wind")
-        except ValueError as exc:
+            Runner("wind").request(payload)
+        except (TypeError, ValueError) as exc:
             assert needle in str(exc), f"报错未指明 {needle}: {exc}"
         else:
             raise AssertionError(f"未抛错（期望报错含 {needle}）")
 
     expect_error(lambda p: p.pop("output_dir"), "output_dir")
     expect_error(lambda p: p.pop("scenario"), "scenario")
-    expect_error(lambda p: p["scenario"].pop("year"), "缺少必填字段 year")
+    expect_error(lambda p: p["scenario"].pop("year"), "year")
     expect_error(lambda p: p["scenario"].__setitem__("resource_year_type", "好年景"), "resource_year_type 必须是")
     expect_error(lambda p: p.__setitem__("foo", 1), "foo")
     expect_error(lambda p: p["city_configs"].append(copy.deepcopy(p["city_configs"][0])), "重复")
@@ -205,7 +207,7 @@ def case_invalid_requests() -> None:
     expect_error(lambda p: p["city_configs"][0].__setitem__("capacity_mw", -5), "capacity_mw 必须为正")
     expect_error(lambda p: p["city_configs"][0]["turbines"][0].__setitem__("rated_power_mw", 0), "rated_power_mw 必须为正")
     expect_error(lambda p: p.__setitem__("loss_factor", "abc"), "loss_factor")
-    expect_error(lambda p: p["scenario"].__setitem__("year", "2024"), "scenario.year")
+    expect_error(lambda p: p["scenario"].__setitem__("year", "2024"), "year 必须是整数")
     expect_error(lambda p: p.__setitem__("data_dir", "Z:/no_such_dir"), "wind")
 
     # 文件形态：配置文件不存在
@@ -255,7 +257,7 @@ def main() -> None:
     Returns:
         None
     """
-    _check("1 全省回归（约4分钟）", case_full_province)
+    _check("1 单市回归（海口，约20秒）", case_full_regression)
     _check("2 单市一致性", case_single_city)
     _check("3 默认值与解析等价", case_defaults)
     _check("4 非法请求校验", case_invalid_requests)

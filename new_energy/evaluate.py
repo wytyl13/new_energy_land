@@ -12,48 +12,10 @@ from __future__ import annotations
 import numpy as np
 import pandas as pd
 
-from ..constants import RESOURCE_YEAR_TYPES
-from ..utils.time_axis import no_feb29
+from .constants import RESOURCE_YEAR_TYPES
+from .utils.time_axis import no_feb29
 
 AUTOCORR_LAGS = [1, 2, 3, 6, 12, 24, 48, 72, 168]
-
-
-def duration_curve(values: np.ndarray) -> np.ndarray:
-    """计算持续时间曲线（按数值降序排列）。
-
-    Args:
-        values (np.ndarray): 逐小时数值序列。
-
-    Returns:
-        np.ndarray: 降序排列的持续时间曲线。
-    """
-    return np.sort(np.asarray(values, dtype=float))[::-1]
-
-
-def autocorr(series: pd.Series) -> np.ndarray:
-    """计算固定滞后（1~168 小时）的自相关系数。
-
-    Args:
-        series (pd.Series): 时间序列。
-
-    Returns:
-        np.ndarray: 各滞后阶数的自相关系数。
-    """
-    return np.array([series.autocorr(lag=lag) for lag in AUTOCORR_LAGS], dtype=float)
-
-
-def ramp_quantiles(series: pd.Series, hours: int) -> tuple[float, float]:
-    """计算 hours 小时爬坡幅度的 P95 与 P99 分位数。
-
-    Args:
-        series (pd.Series): 时间序列。
-        hours (int): 爬坡统计的时间间隔（小时）。
-
-    Returns:
-        tuple[float, float]: (P95, P99) 爬坡幅度。
-    """
-    ramp = series.diff(hours).abs().dropna()
-    return float(ramp.quantile(0.95)), float(ramp.quantile(0.99))
 
 
 def historical_reference(history: pd.Series, years: list[int]) -> dict[str, object]:
@@ -75,9 +37,9 @@ def historical_reference(history: pd.Series, years: list[int]) -> dict[str, obje
     if not blocks:
         raise ValueError("同类历史年为空，无法评估")
     matrix = np.vstack([block.to_numpy(float) for block in blocks])
-    ac = np.vstack([autocorr(block) for block in blocks])
-    ramp1 = np.array([ramp_quantiles(block, 1) for block in blocks])
-    ramp3 = np.array([ramp_quantiles(block, 3) for block in blocks])
+    ac = np.vstack([[block.autocorr(lag=lag) for lag in AUTOCORR_LAGS] for block in blocks])
+    ramp1 = np.array([[block.diff(1).abs().dropna().quantile(q) for q in (0.95, 0.99)] for block in blocks])
+    ramp3 = np.array([[block.diff(3).abs().dropna().quantile(q) for q in (0.95, 0.99)] for block in blocks])
     daily = matrix.reshape(len(blocks), 365, 24).mean(axis=2)
     monthly_rows = []
     for year in years:
@@ -116,13 +78,14 @@ def metric_row(city: str, case: str, gen: pd.Series, reference: dict, years: lis
     hist_mean = float(reference["mean"])
     hist_v3 = float(reference["mean_v3"])
     hist_ac = np.asarray(reference["autocorr"])
-    gen_ac = autocorr(gen)
+    gen_ac = np.array([gen.autocorr(lag=lag) for lag in AUTOCORR_LAGS], dtype=float)
     hist_dur = np.asarray(reference["duration"])
-    gen_dur = duration_curve(gen_values)
+    gen_dur = np.sort(gen_values)[::-1]
     ramp_metrics = {}
     for hours, key in [(1, "1h"), (3, "3h")]:
         hist_q = np.asarray(reference["ramp1" if hours == 1 else "ramp3"])
-        gen_q = np.asarray(ramp_quantiles(gen, hours))
+        ramp = gen.diff(hours).abs().dropna()
+        gen_q = np.asarray([ramp.quantile(0.95), ramp.quantile(0.99)])
         ramp_metrics[f"{key}爬坡P95历史_m_s"] = float(hist_q[0])
         ramp_metrics[f"{key}爬坡P95生成_m_s"] = float(gen_q[0])
         ramp_metrics[f"{key}爬坡P95误差_%"] = float((gen_q[0] - hist_q[0]) / max(hist_q[0], 1e-9) * 100)

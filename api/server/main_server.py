@@ -39,12 +39,12 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="新能源出力场景服务", lifespan=lifespan)
 
-# 跨域全放开；前后端分离部署时按需收紧 origins
+# 跨域全放开（allow_origins="*" 时 credentials 必须为 False，否则浏览器拒收，见 CORS 规范）；前后端分离部署时按需收紧 origins
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
     allow_methods=["*"],
-    allow_credentials=True,
+    allow_credentials=False,
     allow_headers=["*"],
 )
 # power_table 数 MB 级，超 1KB 的响应启用 gzip
