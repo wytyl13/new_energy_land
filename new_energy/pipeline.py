@@ -14,6 +14,8 @@ forward 顺序执行（__call__ 同 forward），数据流转在函数体内一�
 from __future__ import annotations
 
 import logging
+import os
+from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
 
 import numpy as np
@@ -29,6 +31,96 @@ from .utils.time_axis import remap_to_year, year_index
 from .evaluate import evaluate_city
 
 logger = logging.getLogger(__name__)
+
+
+def _single_thread_blas() -> None:
+    """进程池并行前把 BLAS 线程数定为 1（须在 spawn 前设，子进程继承）。
+
+    N 个子进程 × 各自多线程 BLAS 会互抢核，实测 18 市 177s→121s；
+    父进程自身 BLAS 已初始化，不受此设置影响。
+    """
+    for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+        os.environ[var] = "1"
+
+
+def _worker_logging() -> None:
+    """进程池子进程首次执行时配置日志（spawn 不继承父进程 handler）。"""
+    if not logging.getLogger().handlers:
+        logging.basicConfig(
+            level=logging.INFO,
+            format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
+            datefmt="%H:%M:%S",
+        )
+
+
+def _wind_stages(config: WindConfig):
+    """按配置组装风电路径各阶段模块（__init__ 与并行工作进程共用）。
+
+    风电年际指标 = 年平均风速立方（m3/s3），表达式与原实现逐字一致。
+    """
+    return (
+        HistoryBuilder(config.source_years),
+        ResourceYearClassifier(
+            lambda block: float(np.mean(np.power(block.to_numpy(float), 3))),
+            "年平均风速立方_m3_s3",
+            config.train_years,
+        ),
+        WindEventStage(config.train_years),
+        WindScenarioGenerator(config),
+    )
+
+
+def _wind_city_job(args: tuple) -> tuple:
+    """单地市：资源年分类→事件库→GPR 场景（进程池工作函数，入出参均可 pickle）。
+
+    随机数逐市固定种子（generate.RANDOM_SEED），并行与串行结果一致。
+    """
+    city, wind, config = args
+    _worker_logging()
+    history, classify, events, generate = _wind_stages(config)
+    hist = history(wind)
+    train_history = hist.loc[hist.index.year.isin(config.train_years)]
+    classes = classify(hist)
+    library = events(train_history, classes)
+    city_scenarios, plans, phi = generate(train_history, classes, library)
+    metrics = None
+    if config.evaluate:
+        plan_by_case = {case: plans.loc[plans["年景类型"].eq(case)] for case in set(plans["年景类型"])}
+        metrics = evaluate_city(city, train_history, classes, city_scenarios, plan_by_case, config.train_years)
+    return city, classes, city_scenarios, len(library.events), phi, metrics
+
+
+def _solar_stages(config: SolarConfig):
+    """按配置组装光伏路径各阶段模块（__init__ 与并行工作进程共用）。
+
+    光伏年际指标 = 年累计辐照量（Wh/m2 → kWh/m2），表达式与原实现逐字一致。
+    """
+    return (
+        HistoryBuilder(config.source_years),
+        ResourceYearClassifier(
+            lambda block: float(block.sum() / 1000.0),
+            "年累计辐照量_kWh_m2",
+            config.train_years,
+        ),
+        SolarEventStage(config),
+        SolarScenarioGenerator(config),
+    )
+
+
+def _solar_city_job(args: tuple) -> tuple:
+    """单地市：资源年分类→低辐照事件库→GPR 场景（进程池工作函数）。"""
+    city, series, config, latitude, longitude = args
+    _worker_logging()
+    history, classify, events, generate = _solar_stages(config)
+    hist = history(series)
+    ideal_history = build_ideal(hist, latitude, longitude)
+    # 分类用全量历史（最后一年也参与归类），事件库与场景生成只用训练年
+    train_history = hist.loc[hist.index.year.isin(config.train_years)]
+    train_ideal = ideal_history.loc[ideal_history.index.year.isin(config.train_years)]
+    classes = classify(hist)
+    library = events(train_history, train_ideal, classes)
+    city_scenarios, _plans, phi = generate(train_history, train_ideal, classes, library, latitude, longitude)
+    return city, classes, city_scenarios, len(library.events), phi
 
 
 @dataclass
@@ -60,15 +152,7 @@ class WindPowerModel:
             config (WindConfig): 风电算法配置。
         """
         self.config = config
-        self.history = HistoryBuilder(config.source_years)
-        # 风电年际指标 = 年平均风速立方（m3/s3），表达式与原实现逐字一致
-        self.classify = ResourceYearClassifier(
-            lambda block: float(np.mean(np.power(block.to_numpy(float), 3))),
-            "年平均风速立方_m3_s3",
-            config.train_years,
-        )
-        self.events = WindEventStage(config.train_years)
-        self.generate = WindScenarioGenerator(config)
+        self.history, self.classify, self.events, self.generate = _wind_stages(config)
         self.power = WindPowerStage(config)
 
     def forward(
@@ -95,27 +179,23 @@ class WindPowerModel:
         metrics_rows = []
 
         total = len(history_by_city)
-        for i, (city, wind) in enumerate(history_by_city.items(), 1):
-            logger.info("[2-5/6] 地市 %d/%d %s: 资源年分类→事件库→GPR场景生成开始", i, total, city)
-            history = self.history(wind)
-            train_history = history.loc[history.index.year.isin(self.config.train_years)]
-
-            classes = self.classify(history)
-            classes_all[city] = classes
-
-            library = self.events(train_history, classes)
-
-            city_scenarios, plans, phi = self.generate(train_history, classes, library)
+        jobs = [(city, wind, self.config) for city, wind in history_by_city.items()]
+        logger.info("[2-5/6] %d 个地市: 资源年分类→事件库→GPR场景生成（多进程并行）...", total)
+        if total == 1:  # 单市不起进程池，省去 spawn 开销；工作函数与并行同路
+            results = [_wind_city_job(jobs[0])]
+        else:
+            _single_thread_blas()
+            with ProcessPoolExecutor() as pool:
+                results = list(pool.map(_wind_city_job, jobs))
+        for i, (city, classes, city_scenarios, n_events, phi, metrics) in enumerate(results, 1):
             logger.info(
                 "[2-5/6] 地市 %d/%d %s: 完成 (事件库 %d 个, GPR残差lag1 φ=%.2f)",
-                i, total, city, len(library.events), phi,
+                i, total, city, n_events, phi,
             )
-            if self.config.evaluate:
-                plan_by_case = {case: plans.loc[plans["年景类型"].eq(case)] for case in set(plans["年景类型"])}
+            classes_all[city] = classes
+            if metrics is not None:
                 logger.info("[评估] 地市 %s: 指标计算完成", city)
-                metrics_rows.append(
-                    evaluate_city(city, train_history, classes, city_scenarios, plan_by_case, self.config.train_years)
-                )
+                metrics_rows.append(metrics)
             for case, scenario in city_scenarios.items():
                 scenarios.setdefault(case, {})[city] = remap_to_year(scenario, year)
 
@@ -141,15 +221,7 @@ class SolarPowerModel:
             config (SolarConfig): 光伏算法配置。
         """
         self.config = config
-        self.history = HistoryBuilder(config.source_years)
-        # 光伏年际指标 = 年累计辐照量（Wh/m2 → kWh/m2），表达式与原实现逐字一致
-        self.classify = ResourceYearClassifier(
-            lambda block: float(block.sum() / 1000.0),
-            "年累计辐照量_kWh_m2",
-            config.train_years,
-        )
-        self.events = SolarEventStage(config)
-        self.generate = SolarScenarioGenerator(config)
+        self.history, self.classify, self.events, self.generate = _solar_stages(config)
         self.power = SolarPowerStage(config)
 
     def forward(
@@ -173,21 +245,20 @@ class SolarPowerModel:
         classes_all: dict[str, pd.DataFrame] = {}
 
         total = len(solar_by_city)
-        for i, (city, series) in enumerate(solar_by_city.items(), 1):
-            logger.info("[2/4] 地市 %d/%d %s: 资源年分类→低辐照事件库→GPR场景生成开始", i, total, city)
-            history = self.history(series)
-            latitude, longitude = city_configs[city].latitude, city_configs[city].longitude
-            ideal_history = build_ideal(history, latitude, longitude)
-            # 分类用全量历史（最后一年也参与归类），事件库与场景生成只用训练年
-            train_history = history.loc[history.index.year.isin(self.config.train_years)]
-            train_ideal = ideal_history.loc[ideal_history.index.year.isin(self.config.train_years)]
-            classes = self.classify(history)
+        jobs = [
+            (city, series, self.config, city_configs[city].latitude, city_configs[city].longitude)
+            for city, series in solar_by_city.items()
+        ]
+        logger.info("[2/4] %d 个地市: 资源年分类→低辐照事件库→GPR场景生成（多进程并行）...", total)
+        if total == 1:  # 单市不起进程池，省去 spawn 开销；工作函数与并行同路
+            results = [_solar_city_job(jobs[0])]
+        else:
+            _single_thread_blas()
+            with ProcessPoolExecutor() as pool:
+                results = list(pool.map(_solar_city_job, jobs))
+        for i, (city, classes, city_scenarios, n_events, phi) in enumerate(results, 1):
+            logger.info("[2/4] 地市 %d/%d %s: 完成 (事件库 %d 个, GPR残差lag1 φ=%.2f)", i, total, city, n_events, phi)
             classes_all[city] = classes
-            library = self.events(train_history, train_ideal, classes)
-            city_scenarios, _plans, phi = self.generate(
-                train_history, train_ideal, classes, library, latitude, longitude
-            )
-            logger.info("[2/4] 地市 %d/%d %s: 完成 (事件库 %d 个, GPR残差lag1 φ=%.2f)", i, total, city, len(library.events), phi)
             for case, scenario in city_scenarios.items():
                 scenarios_target.setdefault(case, {})[city] = scenario
 

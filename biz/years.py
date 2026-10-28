@@ -36,11 +36,12 @@ class YearsPlan(NamedTuple):
 
 
 def _file_years(grid_dir: Path, kind: str) -> set[int]:
-    """扫 kind 子目录（*_{kind}_{year}.csv，区域前缀任意），返回实际存在的年份集合。"""
-    pattern = re.compile(rf".+_{kind}_(\d{{4}})\.csv")
+    """扫 kind 子目录（{kind}_{year}.csv 或 *_{kind}_{year}.csv，区域前缀可有可无），
+    返回实际存在的年份集合。"""
+    pattern = re.compile(rf"(?:.+_)?{kind}_(\d{{4}})\.csv")
     return {
         int(match.group(1))
-        for path in (Path(grid_dir) / kind).glob(f"*_{kind}_*.csv")
+        for path in (Path(grid_dir) / kind).glob(f"*{kind}_*.csv")
         if (match := pattern.fullmatch(path.name))
     }
 

@@ -30,13 +30,13 @@ OUT_DIR = ROOT / "data" / "nc"
 DATASET = "reanalysis-era5-single-levels"
 AREA = [54, 73, 18, 136]  # 北/西/南/东，含 54N/136E
 VARIABLES = ["2m_temperature", "surface_pressure"]
-RETRIES, BACKOFF_S = 5, 60
+RETRIES, BACKOFF_S = 10, 120
 
-# (文件名, 日期区间)；整年一年一个文件，头尾两个单日
-CHUNKS = [(f"era5_t2m_sp_{y}.nc", f"{y}-01-01/{y}-12-31") for y in range(2000, 2026)]
-CHUNKS += [("era5_t2m_sp_1999-12-31.nc", "1999-12-31/1999-12-31"),
-           ("era5_t2m_sp_2024-12-31.nc", "2024-12-31/2024-12-31"),
-           ("era5_t2m_sp_2026-01-01.nc", "2026-01-01/2026-01-01")]
+# (文件名, 日期区间)；整年一年一个文件，头尾补边单日；从近年往远年（2025 最先到手）
+CHUNKS = [(f"era5_t2m_sp_{y}.nc", f"{y}-01-01/{y}-12-31") for y in range(2025, 1999, -1)]
+CHUNKS[1:1] = [("era5_t2m_sp_2024-12-31.nc", "2024-12-31/2024-12-31"),
+               ("era5_t2m_sp_2026-01-01.nc", "2026-01-01/2026-01-01")]
+CHUNKS.append(("era5_t2m_sp_1999-12-31.nc", "1999-12-31/1999-12-31"))
 
 
 def main() -> None:

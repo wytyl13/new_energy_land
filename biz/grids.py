@@ -63,11 +63,11 @@ def _match_column(
 
 
 def find_grid_file(kind_dir: Path, kind: str, year: int) -> Path:
-    """按 *_{kind}_{year}.csv 找某年数据文件（区域前缀任意，hainan_/beijing_ 均可）；
+    """按 {kind}_{year}.csv 或 *_{kind}_{year}.csv 找某年数据文件（区域前缀可有可无）；
     同一年多个匹配（多区域文件混放）报错。"""
-    files = sorted(kind_dir.glob(f"*_{kind}_{year}.csv"))
+    files = sorted({*kind_dir.glob(f"{kind}_{year}.csv"), *kind_dir.glob(f"*_{kind}_{year}.csv")})
     if not files:
-        raise ValueError(f"数据文件不存在: {kind_dir / f'*_{kind}_{year}.csv'}")
+        raise ValueError(f"数据文件不存在: {kind_dir / f'[区域_]{kind}_{year}.csv'}")
     if len(files) > 1:
         raise ValueError(f"{kind_dir} 同一年有多个 {kind} 文件，须只留一个区域: {[f.name for f in files]}")
     return files[0]
@@ -76,7 +76,7 @@ def find_grid_file(kind_dir: Path, kind: str, year: int) -> Path:
 def _first_grid_file(kind_dir: Path, kind: str) -> Path:
     """kind 子目录按文件名排序最前的年份文件（region_center 专用：格点集年份间恒定；
     single_unit 的列清单取实际读取的首个年份文件，不吃窗口外的老文件）。"""
-    files = sorted(kind_dir.glob(f"*_{kind}_*.csv"))
+    files = sorted({*kind_dir.glob(f"{kind}_*.csv"), *kind_dir.glob(f"*_{kind}_*.csv")})
     if not files:
         raise ValueError(f"数据目录无 {kind} 文件: {kind_dir}")
     return files[0]
