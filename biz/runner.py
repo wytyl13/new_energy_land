@@ -55,12 +55,18 @@ class Runner:
             RequestBase: 请求对象（光伏 city_configs 已含补全的经纬度）。
         """
         req = Schema(self.kind)(source)
-        # 单元名匹配规则（D-29）：全命中归属表 → 归属表给格点；多单元含未命中 → 违法数据；
-        # 单单元未命中 → 合法自定义区域，格点 = 传入数据中声明前缀的全部格点列
+        # 单元名匹配规则（D-29，D-53）：全命中 → 归属表给格点；部分命中 → 未命中的
+        # 无格点单元跳过并告警（如东城区）；单单元未命中 → 合法自定义区域，
+        # 格点 = 传入数据中声明前缀的全部格点列；多单元全部未命中 → 报错
         unmatched = [city for city in req.city_configs if city not in assignment_keys(req.assignment_file)]
-        if unmatched and len(req.city_configs) > 1:
+        if unmatched and len(unmatched) == len(req.city_configs) and len(unmatched) > 1:
             raise ValueError(f"city_configs 含归属表之外的地市: {unmatched}")
-        self.direct_unit = unmatched[0] if unmatched else None
+        if unmatched and len(unmatched) < len(req.city_configs):
+            logger.warning("跳过归属表之外的地市（无格点数据）: %s", unmatched)
+            for city in unmatched:
+                del req.city_configs[city]
+        else:
+            self.direct_unit = unmatched[0] if unmatched else None
         if self.direct_unit:
             logger.info("单单元 %s 未命中归属表，按传入数据全部格点列聚合", self.direct_unit)
 
