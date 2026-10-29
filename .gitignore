@@ -7,6 +7,7 @@ __pycache__/
 
 data/*
 !data/全国格点地市归属.csv
+!data/biz/
 tests/output/
 陆上全省风电出力部署/输出/
 陆上全省光伏出力部署/输出/

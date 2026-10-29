@@ -1,8 +1,10 @@
 # 计划与进度
 
 ## 当前状态
-- 正在做：P6 算法与业务分层重构（P6.5 校验随配置构造走完成，风 5/5 + 光 4/4 自测 PASS）
-- 下一步：P6.4 文档同步（DESIGN 变量项补机组配置类）→ 提交 P6.2~P6.5
+- 正在做：P7 暂停——用户将从头重写 new_energy 算法包（目标结构：行为类全删改普通函数 run_wind/run_solar + 风光共用数学函数，之后 numpy 化）
+- 挂起：P6.4 文档同步（DESIGN 模块对应节待重写目标结构后一并做）→ 提交 P6.2~P6.5
+- 下一步：重写后用 风自测 5/5 + 光自测 4/4 + `.refactor_baseline/` 做回归
+- 阻塞：无
 - 阻塞：无
 
 ## 待决定
@@ -23,6 +25,16 @@
 | P6.3 | 回归：`.refactor_baseline/` 风电 5/5、光伏 4/4 结果比对 + 自测 | 已完成 | 风电 5/5 PASS（单市轻量版 39s，基准按 D-49 当前口径重生成冻结，总量 1e-6/逐元素 1e-4）；光伏 4/4 PASS（基准口径传参 D-47，出力总量 1e-3） |
 | P6.4 | 文档同步：DESIGN「模块对应」「对象分类表」对齐目标结构、流程图重跑 | 未开始 | — |
 | P6.5 | 校验随配置构造走（D-50）：机组配置类进算法层 + request 瘦身 + Runner 类 | 已完成 | request.py 419→346 行（JSON 构造器在内）、config.py 49→128 行；风 5/5 + 光 4/4 自测 PASS（基准回归逐字一致）；run.py/路由/Runner 导入冒烟通过 |
+| P7.1 | biz/assignment 重构为 Assignment 类（仅全国表，D-54）+ 单元测试 | 已完成 | 用户重写实现（向量化键构造/单次分组）；调用方已切类接口；tests/biz/test_assignment 3 属性 PASS（真实全国表 426 单元）；风自测 5/5 PASS；光伏 case 1 待基准重生成 |
+| P7.2 | biz/years 单元测试（真实数据）+ YearsPlan 类重构 | 已完成 | 用户主导逐步重写（步骤编号/_scan/_longest_run）；tests/biz/test_years 3 属性 PASS（2000-2025） |
+| P7.3 | biz/export 单元测试 + 删 `__main__` | 已完成 | tests/biz/test_export 3/3 PASS（手工造 WindResult + fixture，不走算法）；光伏自测 2~4 PASS 确认无影响 |
+| P7.4 | biz/reader 单元测试 + `_wind` 温压换算平铺 + 删 `__main__` | 已完成 | tests/biz/test_reader 3/3 PASS（真实数据 26 年）；风自测 5/5 PASS |
+| P7.5 | biz/grids 重构 GridData 类（全模块进类，region_center→center）+ 单元测试 | 已完成 | 用户重写结构采纳（单循环就地聚合/内联/len!=1）+ 四修正（docstring/is not None/hint/删过程注释）；tests/biz/test_grids 3/3、风 5/5、光 2~4 PASS；reader 参数墙删除，归属表 3 遍→1 遍 |
+| P7.6 | biz/schema 单元测试 + 注释对齐 D-54（426 单元/仅全国表）+ 删 `__main__` | 已完成 | tests/biz/test_schema 3/3 PASS（构造/默认机组 18 单元/非法输入 4 例报错） |
+| P7.7 | biz/runner 单元测试（request 的 D-29 四情形 + 光伏经纬度补全；result/forward 由风光自测覆盖） | 已完成 | tests/biz/test_runner 4/4 PASS（只调 request 不跑算法，秒级） |
+| P7.8 | new_energy/history 删除（一行转调薄包装）：pipeline 阶段首项换 lambda 直接调 beijing_aligned + 删重复 import | 已完成 | tests/new_energy/test_time_axis 3/3 PASS；风自测 5/5、光伏 2~4 PASS（case 1 已知待基准重生成）；README.md:111 残留旧类名待 README 精简一并处理 |
+| P7.9 | new_energy/classify 删除：分类逻辑折入 pipeline（`_classify_years` 普通函数 + `_wind_metric`/`_solar_metric` 具名函数），阶段元组 4 项→3 项，模型属性同步 | 已完成 | import 冒烟通过；风自测 5/5、光伏 2~4 PASS（case 1 已知）；分类逻辑待 P7 pipeline 测试覆盖 |
+| P7.10 | 重构前冻结基准：光伏基准按生产口径（全国表+显式经纬度）重生成 + md5 更新，自测基准口径切换（D-47 旧口径作废）；风基准不变 | 已完成 | 光自测 4/4 PASS（同码同口径，偏差 0）；风自测 5/5 PASS（本会话）；重写回归以本套基准为准 |
 
 ## 待办
 - [ ] README.md 精简为只写怎么用；接口说明指向 API.md

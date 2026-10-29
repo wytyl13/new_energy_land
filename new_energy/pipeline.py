@@ -17,17 +17,16 @@ import logging
 import os
 from concurrent.futures import ProcessPoolExecutor
 from dataclasses import dataclass, field
+from collections.abc import Callable
 
 import numpy as np
 import pandas as pd
 
-from .classify import ResourceYearClassifier
 from .config import SolarConfig, SolarUnit, WindConfig, WindUnit
 from .events import SolarEventStage, WindEventStage
 from .generate import SolarScenarioGenerator, WindScenarioGenerator, build_ideal
-from .history import HistoryBuilder
+from .utils.time_axis import beijing_aligned, no_feb29, remap_to_year, year_index
 from .power import PowerResult, SolarPowerStage, WindPowerStage, weather_climatology
-from .utils.time_axis import remap_to_year, year_index
 from .evaluate import evaluate_city
 
 logger = logging.getLogger(__name__)
@@ -53,18 +52,53 @@ def _worker_logging() -> None:
         )
 
 
-def _wind_stages(config: WindConfig):
-    """按配置组装风电路径各阶段模块（__init__ 与并行工作进程共用）。
+def _wind_metric(block: pd.Series) -> float:
+    """风电年际指标 = 年平均风速立方（m3/s3），表达式与原实现逐字一致。"""
+    return float(np.mean(np.power(block.to_numpy(float), 3)))
 
-    风电年际指标 = 年平均风速立方（m3/s3），表达式与原实现逐字一致。
+
+def _solar_metric(block: pd.Series) -> float:
+    """光伏年际指标 = 年累计辐照量（Wh/m2 → kWh/m2），表达式与原实现逐字一致。"""
+    return float(block.sum() / 1000.0)
+
+
+def _classify_years(
+    history: pd.Series,
+    metric: Callable[[pd.Series], float],
+    value_name: str,
+    train_years: tuple[int, ...],
+) -> pd.DataFrame:
+    """逐年计算年际指标，按训练年 P25/P75 分偏小/正常/偏大资源年（分位框架风/光共用，仅指标不同）。
+
+    Args:
+        history (pd.Series): 北京时间索引的历史序列（全量年份，含最后一年）。
+        metric (Callable): 年际指标函数（该年 Series → 标量）。
+        value_name (str): 指标列名（如 年平均风速立方_m3_s3）。
+        train_years (tuple[int, ...]): 参与分位数统计的训练年份。
+
+    Returns:
+        pd.DataFrame: 每年一行，含 year、指标列、资源年类型三列。
     """
+    rows = []
+    for year in sorted(set(history.index.year)):
+        block = history.loc[history.index.year == year]
+        block = block.loc[no_feb29(block.index)]
+        rows.append({"year": year, value_name: metric(block)})
+    result = pd.DataFrame(rows)
+    p25, p75 = result.loc[result.year.isin(train_years), value_name].quantile([0.25, 0.75])
+    values = result[value_name]
+    result["资源年类型"] = np.where(
+        values <= p25,
+        "偏小资源年",
+        np.where(values >= p75, "偏大资源年", "正常资源年"),
+    )
+    return result
+
+
+def _wind_stages(config: WindConfig):
+    """按配置组装风电路径各阶段模块（__init__ 与并行工作进程共用）。"""
     return (
-        HistoryBuilder(config.source_years),
-        ResourceYearClassifier(
-            lambda block: float(np.mean(np.power(block.to_numpy(float), 3))),
-            "年平均风速立方_m3_s3",
-            config.train_years,
-        ),
+        lambda series: beijing_aligned(series, config.source_years),
         WindEventStage(config.train_years),
         WindScenarioGenerator(config),
     )
@@ -77,10 +111,10 @@ def _wind_city_job(args: tuple) -> tuple:
     """
     city, wind, config = args
     _worker_logging()
-    history, classify, events, generate = _wind_stages(config)
+    history, events, generate = _wind_stages(config)
     hist = history(wind)
     train_history = hist.loc[hist.index.year.isin(config.train_years)]
-    classes = classify(hist)
+    classes = _classify_years(hist, _wind_metric, "年平均风速立方_m3_s3", config.train_years)
     library = events(train_history, classes)
     city_scenarios, plans, phi = generate(train_history, classes, library)
     metrics = None
@@ -91,17 +125,9 @@ def _wind_city_job(args: tuple) -> tuple:
 
 
 def _solar_stages(config: SolarConfig):
-    """按配置组装光伏路径各阶段模块（__init__ 与并行工作进程共用）。
-
-    光伏年际指标 = 年累计辐照量（Wh/m2 → kWh/m2），表达式与原实现逐字一致。
-    """
+    """按配置组装光伏路径各阶段模块（__init__ 与并行工作进程共用）。"""
     return (
-        HistoryBuilder(config.source_years),
-        ResourceYearClassifier(
-            lambda block: float(block.sum() / 1000.0),
-            "年累计辐照量_kWh_m2",
-            config.train_years,
-        ),
+        lambda series: beijing_aligned(series, config.source_years),
         SolarEventStage(config),
         SolarScenarioGenerator(config),
     )
@@ -111,13 +137,13 @@ def _solar_city_job(args: tuple) -> tuple:
     """单地市：资源年分类→低辐照事件库→GPR 场景（进程池工作函数）。"""
     city, series, config, latitude, longitude = args
     _worker_logging()
-    history, classify, events, generate = _solar_stages(config)
+    history, events, generate = _solar_stages(config)
     hist = history(series)
     ideal_history = build_ideal(hist, latitude, longitude)
     # 分类用全量历史（最后一年也参与归类），事件库与场景生成只用训练年
     train_history = hist.loc[hist.index.year.isin(config.train_years)]
     train_ideal = ideal_history.loc[ideal_history.index.year.isin(config.train_years)]
-    classes = classify(hist)
+    classes = _classify_years(hist, _solar_metric, "年累计辐照量_kWh_m2", config.train_years)
     library = events(train_history, train_ideal, classes)
     city_scenarios, _plans, phi = generate(train_history, train_ideal, classes, library, latitude, longitude)
     return city, classes, city_scenarios, len(library.events), phi
@@ -152,7 +178,7 @@ class WindPowerModel:
             config (WindConfig): 风电算法配置。
         """
         self.config = config
-        self.history, self.classify, self.events, self.generate = _wind_stages(config)
+        self.history, self.events, self.generate = _wind_stages(config)
         self.power = WindPowerStage(config)
 
     def forward(
@@ -221,7 +247,7 @@ class SolarPowerModel:
             config (SolarConfig): 光伏算法配置。
         """
         self.config = config
-        self.history, self.classify, self.events, self.generate = _solar_stages(config)
+        self.history, self.events, self.generate = _solar_stages(config)
         self.power = SolarPowerStage(config)
 
     def forward(

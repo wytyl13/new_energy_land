@@ -44,6 +44,28 @@
       "args": ["--input", "data/xxx.csv"],             // 没有参数就写 []
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal"
+    },
+    {
+      "name": "test_assignment",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "tests.test_assignment",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "test_year",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "tests.test_years",
+      "cwd": "${workspaceFolder}"
+    },
+    {
+      "name": "test_export",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "tests.test_export",
+      "cwd": "${workspaceFolder}"
     }
+
   ]
 }

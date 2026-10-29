@@ -25,10 +25,9 @@ logger = logging.getLogger(__name__)
 # 服务端默认路径（换区域时改这里）
 _ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_DATA_DIR = _ROOT / "data" / "hainan_era5_grid_csv"
-# 默认归属表 = 全国表（每行一个格点数值坐标，368 单元）；海南旧表（wind_grid/solar_grid
-# 列名结构）仍可经 assignment_file 传入，两种结构均兼容
+# 默认归属表 = 全国表（每行一个格点数值坐标，426 单元，D-54 仅此一种结构）
 DEFAULT_ASSIGNMENT = _ROOT / "data" / "全国格点地市归属.csv"
-_BIZ_DIR = Path(__file__).resolve().parent
+_BIZ_DIR = Path(__file__).resolve().parents[1] / "data" / "biz"
 
 # 各 kind 的数据子目录，兼作 variable_prefixes 允许的变量键（D-29）
 SUBDIRS = {
@@ -188,35 +187,3 @@ class Schema:
         return req
 
     __call__ = forward
-
-
-if __name__ == "__main__":
-    """冒烟自检：合法构造输出字段，非法输入输出报错文案。运行: python -m biz.schema"""
-    import copy
-
-    fixture = _ROOT / "tests" / "fixtures" / "wind_single_city.json"
-    req = Schema("wind")(fixture)
-    unit = req.city_configs["460100_海口市"]
-    print(f"{type(req).__name__}: year={req.scenario.year} {req.scenario.resource_year_type}"
-          f" 单元数={len(req.city_configs)} capacity={unit.capacity_mw}"
-          f" 机型={unit.turbines[0].model} evaluate={req.evaluate}")
-
-    solar = Schema("solar")(_ROOT / "tests" / "fixtures" / "solar_danzhou.json")
-    s = solar.city_configs["460400_儋州市"]
-    print(f"{type(solar).__name__}: year={solar.scenario.year} {solar.scenario.resource_year_type}"
-          f" 单元数={len(solar.city_configs)} capacity={s.capacity_mw}"
-          f" lat/lon=({s.latitude}, {s.longitude}) components={len(s.components)}")
-
-    payload = json.loads(fixture.read_text(encoding="utf-8"))
-    for label, mutate in [
-        ("capacity_mw=-5   ", lambda p: p["city_configs"][0].__setitem__("capacity_mw", -5)),
-        ("未知字段 foo      ", lambda p: p.__setitem__("foo", 1)),
-        ("year='2024'      ", lambda p: p["scenario"].__setitem__("year", "2024")),
-        ("缺 output_dir    ", lambda p: p.pop("output_dir")),
-    ]:
-        bad = copy.deepcopy(payload)
-        mutate(bad)
-        try:
-            Schema("wind")(bad)
-        except (TypeError, ValueError) as exc:
-            print(f"{label}-> {type(exc).__name__}: {exc}")

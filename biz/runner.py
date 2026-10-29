@@ -19,9 +19,9 @@ from pathlib import Path
 
 from new_energy.pipeline import SolarPowerModel, WindPowerModel
 
-from .assignment import assignment_keys, city_centers
+from .assignment import Assignment
 from .export import Export
-from .grids import region_center
+from .grids import GridData
 from .reader import Reader
 from .schema import Schema
 
@@ -58,7 +58,7 @@ class Runner:
         # 单元名匹配规则（D-29，D-53）：全命中 → 归属表给格点；部分命中 → 未命中的
         # 无格点单元跳过并告警（如东城区）；单单元未命中 → 合法自定义区域，
         # 格点 = 传入数据中声明前缀的全部格点列；多单元全部未命中 → 报错
-        unmatched = [city for city in req.city_configs if city not in assignment_keys(req.assignment_file)]
+        unmatched = [city for city in req.city_configs if city not in Assignment(req.assignment_file).keys]
         if unmatched and len(unmatched) == len(req.city_configs) and len(unmatched) > 1:
             raise ValueError(f"city_configs 含归属表之外的地市: {unmatched}")
         if unmatched and len(unmatched) < len(req.city_configs):
@@ -72,11 +72,12 @@ class Runner:
 
         if self.kind == "solar":
             # 补 latitude/longitude 缺省：命中单元用归属表格点中心，未命中的单单元用数据格点坐标均值
-            centers = city_centers(req.assignment_file)
+            centers = Assignment(req.assignment_file).centers
             for city, unit in req.city_configs.items():
                 if unit.latitude is not None:
                     continue
-                center = (region_center(req.data_dir, "solar", req.variable_prefixes)
+                center = (GridData(req.data_dir, req.assignment_file,
+                                   prefixes=req.variable_prefixes).center("solar")
                           if city == self.direct_unit else centers.get(city))
                 if center is None:
                     raise ValueError(f"city_configs 未提供 {city} 的 latitude/longitude，且归属表无该地市格点中心")

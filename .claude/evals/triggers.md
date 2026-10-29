@@ -81,3 +81,12 @@
 | reader 放包内还是包外 | design-module-layering | bootstrap-project |
 | 业务包叫 biz 还是 service | design-module-layering | bootstrap-project |
 | biz 里加个入参校验 | change-code | design-module-layering |
+| 重新设计这个模块 | write-python-code | port-legacy-code |
+| 重构 assignment 别照搬旧代码 | write-python-code | change-code |
+| 这个类重写一下要更简洁 | write-python-code | design-module-layering |
+| 帮我把这段代码原样挪个位置 | change-code | write-python-code |
+| init 步骤罗列清楚点 | write-python-code | design-module-layering |
+| 一行代码还建什么函数 | write-python-code | change-code |
+| 旧函数搬进新类保留吗 | write-python-code | port-legacy-code |
+| 中间变量能不能删 | write-python-code | change-code |
+| 重构自查查什么 | write-python-code | design-module-layering |

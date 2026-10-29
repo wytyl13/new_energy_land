@@ -27,7 +27,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from biz.assignment import city_centers
+from biz.assignment import Assignment
 from biz.runner import Runner, run
 from biz.schema import DEFAULT_DATA_DIR, Schema
 
@@ -43,12 +43,9 @@ CITY = "460400_儋州市"
 # 与 .refactor_baseline/solar/orig/danzhou_pv_physical_model_config.json 同口径（统一 JSON 格式）
 CONFIG = json.loads((FIXTURES / "solar_danzhou.json").read_text(encoding="utf-8"))
 
-# 基准口径（D-47）：冻结基准生成自 海南共同80格点表 + 缺省经纬度（该市 inside 格点均值），
-# 回归比对须按同口径传参；生产默认（全国表 + 显式经纬度）与基准口径不同，不做数值比对
+# 基准口径（P7.9 重生成）：与生产默认一致（全国归属表 + 显式经纬度），D-47 旧口径差异不再适用；
+# 出力仍按总量比对（晨昏 17 时 POA 对太阳位置边界敏感，逐元素不可复现）
 BASELINE_PAYLOAD = copy.deepcopy(CONFIG)
-BASELINE_PAYLOAD["assignment_file"] = str(REPO / "data" / "海南地市分区" / "海南共同80格点_地市归属.csv")
-for _field in ("latitude", "longitude"):
-    BASELINE_PAYLOAD["city_configs"][0].pop(_field)
 
 results: list[tuple[str, str, float]] = []
 
@@ -168,7 +165,7 @@ def case_defaults() -> None:
     for field in ("latitude", "longitude"):
         payload["city_configs"][0].pop(field)
     omitted = Runner("solar").request(payload)
-    center = city_centers(omitted.assignment_file)[CITY]
+    center = Assignment(omitted.assignment_file).centers[CITY]
     got = omitted.city_configs[CITY]
     assert (got.latitude, got.longitude) == center, "缺省经纬度应为地市格点中心"
     # 文件与 dict 两种形态解析等价

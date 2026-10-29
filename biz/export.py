@@ -14,10 +14,9 @@ import logging
 import time
 
 import pandas as pd
-
 from new_energy.power import PowerResult
-
 from .constants import ENC
+from .schema import RequestBase
 
 logger = logging.getLogger(__name__)
 
@@ -30,7 +29,7 @@ class Export:
         req (RequestBase): Schema 输出的请求对象（取输出路径/年份/景型/装机）。
     """
 
-    def __init__(self, kind: str, req):
+    def __init__(self, kind: str, req: RequestBase):
         """记录算法类型与请求对象。
 
         Args:
@@ -103,20 +102,3 @@ class Export:
         data["区域总出力_MW"] = result.total_power_mw
         data["区域总出力_pu"] = result.total_power_pu
         return pd.DataFrame(data)
-
-
-if __name__ == "__main__":
-    """冒烟自检：Runner 全流程走 Export 写 CSV + 结果 JSON 字段。运行: python -m biz.export"""
-    import time
-    from pathlib import Path
-
-    from .runner import Runner
-
-    fixtures = Path(__file__).resolve().parents[1] / "tests" / "fixtures"
-    for kind, fixture in (("wind", "wind_single_city.json"), ("solar", "solar_danzhou.json")):
-        start = time.perf_counter()
-        resp = Runner(kind)(fixtures / fixture)
-        print(f"{kind}: file={Path(resp['output_file']).name} cities={resp['cities']}"
-              f" capacity={resp['total_capacity_mw']}"
-              f" rows={len(next(iter(resp['power_table'].values())))}"
-              f" cols={list(resp['power_table'])} elapsed={resp['elapsed_s']}s")

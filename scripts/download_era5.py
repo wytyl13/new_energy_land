@@ -19,6 +19,7 @@
 from __future__ import annotations
 
 import argparse
+import calendar
 import sys
 import time
 from pathlib import Path
@@ -32,11 +33,22 @@ AREA = [54, 73, 18, 136]  # 北/西/南/东，含 54N/136E
 VARIABLES = ["2m_temperature", "surface_pressure"]
 RETRIES, BACKOFF_S = 10, 120
 
-# (文件名, 日期区间)；整年一年一个文件，头尾补边单日；从近年往远年（2025 最先到手）
-CHUNKS = [(f"era5_t2m_sp_{y}.nc", f"{y}-01-01/{y}-12-31") for y in range(2025, 1999, -1)]
-CHUNKS[1:1] = [("era5_t2m_sp_2024-12-31.nc", "2024-12-31/2024-12-31"),
-               ("era5_t2m_sp_2026-01-01.nc", "2026-01-01/2026-01-01")]
-CHUNKS.append(("era5_t2m_sp_1999-12-31.nc", "1999-12-31/1999-12-31"))
+ALL_TIMES = [f"{h:02d}:00" for h in range(24)]
+
+
+def year_dates(year: int) -> list:
+    """该年真实存在的日期列表；2 月天数按闰年取。"""
+    return [f"{year}-{m:02d}-{d:02d}" for m in range(1, 13)
+            for d in range(1, calendar.monthrange(year, m)[1] + 1)]
+
+
+# (文件名, {date 选择})；整年一年一个文件，头尾补边单日；从近年往远年（2025 最先到手）。
+# 用枚举的真实日期：year/month/day 全 31 天的写法会被新 CDS 把 2/30、2/31 滚成下月，
+# MARS 报 Duplicate value for month（2026-10-29 实测复现；枚举写法单日请求实测成功）
+CHUNKS = [(f"era5_t2m_sp_{y}.nc", {"date": year_dates(y)}) for y in range(2025, 1999, -1)]
+CHUNKS[1:1] = [("era5_t2m_sp_2024-12-31.nc", {"date": ["2024-12-31"]}),
+               ("era5_t2m_sp_2026-01-01.nc", {"date": ["2026-01-01"]})]
+CHUNKS.append(("era5_t2m_sp_1999-12-31.nc", {"date": ["1999-12-31"]}))
 
 
 def main() -> None:
@@ -47,28 +59,29 @@ def main() -> None:
 
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     chunks = [(n, s) for n, s in CHUNKS if not args.only or any(k in n for k in args.only)]
-    todo = [(name, span) for name, span in chunks if not (OUT_DIR / name).exists() or (OUT_DIR / name).stat().st_size == 0]
+    todo = [(name, sel) for name, sel in chunks if not (OUT_DIR / name).exists() or (OUT_DIR / name).stat().st_size == 0]
     done = [name for name, _ in chunks if name not in [t[0] for t in todo]]
     print(f"计划 {len(chunks)} 个文件，已完成 {len(done)}，待下载 {len(todo)} → {OUT_DIR}", flush=True)
-    for name, span in todo:
-        print(f"  待下载: {name} ({span})", flush=True)
+    for name, sel in todo:
+        dates = sel["date"]
+        print(f"  待下载: {name} ({len(dates)} 天: {dates[0]}~{dates[-1]})", flush=True)
     if args.dry_run or not todo:
         return
 
     client = cdsapi.Client(timeout=600, progress=False)
-    for i, (name, span) in enumerate(todo, 1):
+    for i, (name, sel) in enumerate(todo, 1):
         target = OUT_DIR / name
         request = {
             "variable": VARIABLES,
-            "date": span,
-            "time": [f"{h:02d}:00" for h in range(24)],
+            "time": ALL_TIMES,
             "area": AREA,
             "data_format": "netcdf",
             "download_format": "unarchived",
+            **sel,
         }
         for attempt in range(1, RETRIES + 1):
             try:
-                print(f"[{i}/{len(todo)}] 请求 {span} (尝试 {attempt})，排队中...", flush=True)
+                print(f"[{i}/{len(todo)}] 请求 {name} ({len(sel['date'])} 天, 逐小时) (尝试 {attempt})，排队中...", flush=True)
                 t0 = time.perf_counter()
                 client.retrieve(DATASET, request, str(target))
                 print(f"[{i}/{len(todo)}] 完成 {name}: {target.stat().st_size / 1e6:.1f} MB，"
