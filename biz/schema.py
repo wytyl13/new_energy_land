@@ -36,6 +36,10 @@ SUBDIRS = {
 }
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 请求字段对象（JSON 装载与默认值）
+# ─────────────────────────────────────────────────────────────────────────────
+
 @dataclass(frozen=True)
 class Scenario:
     """请求 scenario 段：输出年份与资源年类型。"""
@@ -115,6 +119,10 @@ class SolarRequest(RequestBase):
         if isinstance(self.albedo, bool) or not isinstance(self.albedo, (int, float)):
             raise ValueError("albedo 必须是数字")
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 请求解析入口（统一 JSON 校验）
+# ─────────────────────────────────────────────────────────────────────────────
 
 class Schema:
     """JSON 请求 → 请求对象（WindRequest/SolarRequest）。"""

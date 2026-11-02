@@ -16,8 +16,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
-from new_energy.pipeline import WindResult
-from new_energy.power import PowerResult
+from new_energy.result import PowerResult, WindResult
 
 from biz.export import Export
 from biz.schema import Schema

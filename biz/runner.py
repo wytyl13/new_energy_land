@@ -17,7 +17,8 @@ import logging
 import time
 from pathlib import Path
 
-from new_energy.pipeline import SolarPowerModel, WindPowerModel
+from new_energy.solar import run_solar
+from new_energy.wind import run_wind
 
 from .assignment import Assignment
 from .export import Export
@@ -27,6 +28,10 @@ from .schema import Schema
 
 logger = logging.getLogger(__name__)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 业务层总装（request / result / forward）
+# ─────────────────────────────────────────────────────────────────────────────
 
 class Runner:
     """业务层组装器：request 校验匹配，result 取数算到结果，forward 写出返回。
@@ -112,10 +117,10 @@ class Runner:
     __call__ = forward
 
     def _model(self, req):
-        """Reader 取数 → 算法模型 → 结果对象。"""
+        """Reader 取数 → 算法模型 → 结果对象（风/光各自的 run_* 入口，进程池并行）。"""
         config, series = Reader(self.kind)(req, self.direct_unit)
-        model = WindPowerModel if self.kind == "wind" else SolarPowerModel
-        return model(config)(*series, req.city_configs)
+        run = run_wind if self.kind == "wind" else run_solar
+        return run(config, *series, req.city_configs)
 
 
 def run(kind: str, source: dict | str | Path) -> dict:

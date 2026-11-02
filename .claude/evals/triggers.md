@@ -21,6 +21,10 @@
 | 建一个机型参数数据类 | write-python-code | handle-input-data |
 | 这个类太大拆一下 | write-python-code | design-module-layering |
 | 字段注释格式怎么写 | write-python-code | maintain-project-docs |
+| 类分节注释怎么写 | write-python-code | maintain-project-docs |
+| 给这个文件加分组横线注释 | write-python-code | maintain-project-docs |
+| 类的分节注释风格统一一下 | write-python-code | change-code |
+| DESIGN 里加分节标题 | maintain-project-docs | write-python-code |
 | 新建 evaluate.py | write-python-code | bootstrap-project |
 | 建个工具脚本 | write-python-code | bootstrap-project |
 | 文件头格式补上 | write-python-code | maintain-project-docs |
@@ -90,3 +94,10 @@
 | 旧函数搬进新类保留吗 | write-python-code | port-legacy-code |
 | 中间变量能不能删 | write-python-code | change-code |
 | 重构自查查什么 | write-python-code | design-module-layering |
+| 重写 solar.py 镜像 wind.py | write-python-code | port-legacy-code |
+| 把旧模型改成子模块结构 | write-python-code | design-module-layering |
+| 算法重写结构模板怎么定 | write-python-code | port-legacy-code |
+| 回归判据逐位还是容差 | verify-results | write-python-code |
+| 算法层要不要 try catch | write-python-code | build-fastapi-service |
+| 计算函数错误接住还是抛出 | write-python-code | change-code |
+| 下游还要再校验一遍吗 | write-python-code | handle-input-data |

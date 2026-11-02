@@ -19,6 +19,10 @@ from fastapi import APIRouter, Body
 from api.response import make_response
 from biz.runner import run
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 光电路由（POST /api/solar/run）
+# ─────────────────────────────────────────────────────────────────────────────
+
 router = APIRouter(prefix="/api/solar", tags=["Solar"])
 
 

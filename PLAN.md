@@ -1,10 +1,9 @@
 # 计划与进度
 
 ## 当前状态
-- 正在做：P7 暂停——用户将从头重写 new_energy 算法包（目标结构：行为类全删改普通函数 run_wind/run_solar + 风光共用数学函数，之后 numpy 化）
-- 挂起：P6.4 文档同步（DESIGN 模块对应节待重写目标结构后一并做）→ 提交 P6.2~P6.5
-- 下一步：重写后用 风自测 5/5 + 光自测 4/4 + `.refactor_baseline/` 做回归
-- 阻塞：无
+- 正在做：无（P7 完成；结构整理收尾完成）
+- 挂起：提交 P6.2~P6.5（P6.4 已完成）
+- 下一步：evaluate=true fixture 覆盖缺口
 - 阻塞：无
 
 ## 待决定
@@ -23,7 +22,7 @@
 | P6.1 | 抽取 `biz/`：request/assignment/runner，输出表组装移入；算法包暂不动 | 已完成 | 风电 5/5 PASS（全省回归 311s）、光伏 4/4 PASS；run.py 与路由导入冒烟通过 |
 | P6.2 | 算法包去 wind/solar 子包按阶段平铺 + 模型类 forward（D-42~D-46）+ 参数集中 config/constants（D-48） | 已完成 | 基准口径下场景总量 1e-11；旧码/新码默认口径同挂 3.782e-03（光伏）、8.777e-02（风电）→ 非重构回归（D-47 口径差异）；光伏自测 4/4 PASS（出力总量 1e-3，D-47）；风电 2~5 PASS、1 为 Q-05 基准问题；参数集中前后偏差逐字不变 |
 | P6.3 | 回归：`.refactor_baseline/` 风电 5/5、光伏 4/4 结果比对 + 自测 | 已完成 | 风电 5/5 PASS（单市轻量版 39s，基准按 D-49 当前口径重生成冻结，总量 1e-6/逐元素 1e-4）；光伏 4/4 PASS（基准口径传参 D-47，出力总量 1e-3） |
-| P6.4 | 文档同步：DESIGN「模块对应」「对象分类表」对齐目标结构、流程图重跑 | 未开始 | — |
+| P6.4 | 文档同步：DESIGN「模块对应」「对象分类表」对齐目标结构、流程图重跑 | 已完成 | DESIGN 全文按现状重写（2026-10-30）：模块对应改 api/biz/new_energy 三层实况表、工程实现按对象重组（请求匹配/归属取数/风电模型 wind.py/光伏模型/物理出力/输出组装）、单元匹配更新 D-53、归属仅全国表 D-54、变量表与输出文件名补位置；算法流程未变，流程图 PNG 不需重跑 |
 | P6.5 | 校验随配置构造走（D-50）：机组配置类进算法层 + request 瘦身 + Runner 类 | 已完成 | request.py 419→346 行（JSON 构造器在内）、config.py 49→128 行；风 5/5 + 光 4/4 自测 PASS（基准回归逐字一致）；run.py/路由/Runner 导入冒烟通过 |
 | P7.1 | biz/assignment 重构为 Assignment 类（仅全国表，D-54）+ 单元测试 | 已完成 | 用户重写实现（向量化键构造/单次分组）；调用方已切类接口；tests/biz/test_assignment 3 属性 PASS（真实全国表 426 单元）；风自测 5/5 PASS；光伏 case 1 待基准重生成 |
 | P7.2 | biz/years 单元测试（真实数据）+ YearsPlan 类重构 | 已完成 | 用户主导逐步重写（步骤编号/_scan/_longest_run）；tests/biz/test_years 3 属性 PASS（2000-2025） |
@@ -35,7 +34,9 @@
 | P7.8 | new_energy/history 删除（一行转调薄包装）：pipeline 阶段首项换 lambda 直接调 beijing_aligned + 删重复 import | 已完成 | tests/new_energy/test_time_axis 3/3 PASS；风自测 5/5、光伏 2~4 PASS（case 1 已知待基准重生成）；README.md:111 残留旧类名待 README 精简一并处理 |
 | P7.9 | new_energy/classify 删除：分类逻辑折入 pipeline（`_classify_years` 普通函数 + `_wind_metric`/`_solar_metric` 具名函数），阶段元组 4 项→3 项，模型属性同步 | 已完成 | import 冒烟通过；风自测 5/5、光伏 2~4 PASS（case 1 已知）；分类逻辑待 P7 pipeline 测试覆盖 |
 | P7.10 | 重构前冻结基准：光伏基准按生产口径（全国表+显式经纬度）重生成 + md5 更新，自测基准口径切换（D-47 旧口径作废）；风基准不变 | 已完成 | 光自测 4/4 PASS（同码同口径，偏差 0）；风自测 5/5 PASS（本会话）；重写回归以本套基准为准 |
+| P7.11 | new_energy/wind.py 从规格重写（垂直切片）：五步普通函数、(年数, 8760) 装箱 + MONTH_STARTS 查表、常数具名、行为类全废 | 已完成 | 与旧 WindPowerModel 同输入对算：单市、两市（进程池）全量逐位一致 0.0；逐级二分（特征/事件/标准/φ/基础场景/校准）全 0；evaluate 路径未覆盖（fixture 未开）；后续精化：校准链收为 Generator 私有方法（_quantile_map/_calibrate_levels/_calibrate_quantiles/_insert_events）+ 死守卫删除/掩码直取参考矩阵/权重单算，合成数据对算逐位一致（3 场景/117 行方案/φ 全同）；再合入用户版结构：打分/写入抽为 _score_candidate/_apply_event + zip 月遍历 + inf 初始化最优 + g_mean 单算，对算仍逐位一致；按 write-python-code 规则补全私有方法 Args/Returns docstring + 步骤编号注释 + train_mask 同表达式合并，对算仍逐位一致；事件库改长表：EventLibrary 类废为模块级函数 event_details 返回 (E,5) 明细（列=年行号/类型/起点/时长/月份，风速值不复制），_insert_events 三处消费改现取（布尔筛行/行数÷年数/train_grid 切片），合成数据对算逐位一致（3 场景/358 事件/φ 全同）+ 风自测 5/5 PASS；再改明细首列年行号→年份（行号消费端 searchsorted 现取，event_cases 循环外单算），对算仍逐位一致 + 风自测 5/5 PASS；再整理为 EventDetails 类（(E,5) 明细 + pool/n_case_years/segment 现取方法，cases 构造时一次算好；_insert_events 7 参数→4），风自测 5/5 PASS（冻结基准逐字一致）；BaseScene 步骤8 拆为 8 相加/9 截负两步（表达式不变），风自测 5/5 PASS；BaseScene 与 Generator 拆平级：Generator 不再组装 base（签名加 base 参数、不返回 φ），WindModel 组装四个平级子模块、forward 先 4a base 后 4b generate，风自测 5/5 PASS（冻结基准逐字一致）；Generator 返回改裸 ndarray (3, 8760)（行序同 RESOURCE_YEAR_TYPES），装箱 {case: Series} 挪至 forward 一行，风自测 5/5 PASS；评估封装 Evaluate 类（__init__ 存开关/train_years，__call__ 转调 evaluate_city），forward 步骤6 一行调用，风自测 5/5 PASS（evaluate 路径仍无覆盖）；Physics 拆单城市（场景风速+输出年温压+机组配置 → {case: MW}），区域汇总（逐城市出力累加+容量加权风速，城市累加顺序冻结）移 run_wind，中途结构化补丁锚点撞名删错段已修复（forward/run_wind 头自会话记录复原），修复后与旧 WindPowerModel 合成数据（12 年×2 市）对算逐位一致 0.0（scenarios/classes/power 全字段），风自测 5/5 PASS；physics 单元计算移入 forward（签名加 temp/pressure/unit、步骤7 重排+步骤8 物理出力、返回 7 元组含逐单元出力），run_wind 只剩并行分发+区域汇总，临时接线 biz 跑风自测 5/5 PASS（接线已还原）；Generator 精化（用户确认 2026-11-01）：_calibrate_quantiles 删方法内联 __call__ 步骤3、选点循环抽 _pick_position、删 pool 空死守卫（count 恒 0 空转，rng 流不变）、plans 全链改 list[dict]（Evaluate 内现转 DataFrame，plan_by_case 新旧构造合成对拍等价）、注释/维度标注润色；临时接线 biz 风自测 5/5 PASS（冻结基准逐字一致）；MONTH_STARTS/month_of/装箱 year_grid 上移 utils/time_axis（风/光共用，风自测 5/5 PASS 不变）；evaluate 路径仍无 fixture 覆盖 |
+| P7.12 | new_energy/solar.py 从规格重写（垂直切片，镜像 wind.py）+ 接线 biz + 删旧类 | 已完成 | 与旧 SolarPowerModel 真实数据对算：三 case 场景/逐市出力/区域 MW/pu 全部 max|d|≤6.1e-12（浮点末位级），分类逐位一致；biz 接线 run_solar/run_wind；光自测 4/4 PASS（冻结基准）、风自测 5/5 PASS；删 pipeline.py/events.py/generate.py，power.py 瘦身为 PowerResult（weather_climatology/CLIMATOLOGY_INDEX 移入 solar.py），tests/biz/test_export 改 import new_energy.wind；DESIGN（模块对应/对象分类表/光伏模型节/物理出力节/维度流转 stage 1·6）与 README 模块引用同步；test_export 3/3、test_runner 4/4、test_time_axis 3/3 PASS。行为差异记录：事件插入方案行旧实现产出即弃、不再产出；单市不再走进程池捷径（joblib 统一，风同） |
+| P8 | 三层代码分节注释（model.py 三线 ── 风格，25 处）+ 流程图按「维度流转」重做 | 已完成 | 横线行全库与 model.py 逐字一致（77 个 ─）；import 冒烟（wind/solar/biz.runner/api.server.main_server）+ test_export 3/3 PASS；`docs/维度流转图.png` 替代数据流转网络图.png（主链一条 = 维度总流转式，框上标输出维度，温压/温度虚线弧直通⑥），DESIGN「流程图」节同步 |
 
 ## 待办
-- [ ] README.md 精简为只写怎么用；接口说明指向 API.md
-- [ ] `api/server/main_server.py` 跨域改为 `allow_credentials=False`（当前 `"*"` 和 `True` 同时用）
+（无）

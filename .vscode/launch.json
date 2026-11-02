@@ -19,6 +19,15 @@
       "cwd": "${workspaceFolder}",
       "console": "integratedTerminal"
     },
+    {
+      "name": "测试业务-算法执行",
+      "type": "debugpy",
+      "request": "launch",
+      "module": "tests.biz.test_runner_real",
+      // "args": ["tests/fixtures/wind_minimal.json"],
+      "cwd": "${workspaceFolder}",
+      "console": "integratedTerminal"
+    },
 
     // ============ 通用模板：要加新启动项，复制下面任意一段改 name/module(program)/args ============
 

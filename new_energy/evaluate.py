@@ -18,6 +18,10 @@ from .utils.time_axis import no_feb29
 AUTOCORR_LAGS = [1, 2, 3, 6, 12, 24, 48, 72, 168]
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 评估指标（evaluate=true 时输出）
+# ─────────────────────────────────────────────────────────────────────────────
+
 def historical_reference(history: pd.Series, years: list[int]) -> dict[str, object]:
     """汇总同类历史年的参考指标（均值、立方均值、持续曲线、自相关、爬坡、日/月均值）。
 
@@ -112,25 +116,22 @@ def metric_row(city: str, case: str, gen: pd.Series, reference: dict, years: lis
     }
 
 
-def evaluate_city(city: str, history: pd.Series, classes: pd.DataFrame, scenarios: dict[str, pd.Series], plans: dict[str, pd.DataFrame], train_years: tuple[int, ...]) -> pd.DataFrame:
+def evaluate_city(city: str, history: pd.Series, case_years: dict[str, list[int]], scenarios: dict[str, pd.Series], plans: dict[str, pd.DataFrame]) -> pd.DataFrame:
     """计算一个地市三类场景的完整指标表（内存返回，不写文件）。
 
     Args:
         city (str): 地市键。
         history (pd.Series): 北京时间索引的风速历史序列。
-        classes (pd.DataFrame): classify_years 的输出。
+        case_years (dict[str, list[int]]): 资源年类型 → 该类训练年列表。
         scenarios (dict[str, pd.Series]): 资源年类型 → 场景序列。
         plans (dict[str, pd.DataFrame]): 资源年类型 → 事件插入方案表。
-        train_years (tuple[int, ...]): 训练年份。
 
     Returns:
         pd.DataFrame: 三行指标表，每行对应一类资源年。
     """
     rows = []
     for case in RESOURCE_YEAR_TYPES:
-        years = classes.loc[
-            classes["资源年类型"].eq(case) & classes.year.isin(train_years), "year"
-        ].astype(int).tolist()
+        years = case_years[case]
         reference = historical_reference(history, years)
         rows.append(metric_row(city, case, scenarios[case], reference, years, plans.get(case, pd.DataFrame())))
     return pd.DataFrame(rows)

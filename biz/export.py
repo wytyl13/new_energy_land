@@ -14,12 +14,16 @@ import logging
 import time
 
 import pandas as pd
-from new_energy.power import PowerResult
+from new_energy.result import PowerResult
 from .constants import ENC
 from .schema import RequestBase
 
 logger = logging.getLogger(__name__)
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 输出表组装与写文件（列集冻结）
+# ─────────────────────────────────────────────────────────────────────────────
 
 class Export:
     """出力表写出与结果 JSON（列集列序为冻结对外约定）。

@@ -15,6 +15,10 @@ from typing import Any
 from fastapi.encoders import jsonable_encoder
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 统一返回体构造
+# ─────────────────────────────────────────────────────────────────────────────
+
 def make_response(success: bool, message: str = "", data: Any = None) -> dict:
     """统一返回体 {success, message, data, timestamp}。
 

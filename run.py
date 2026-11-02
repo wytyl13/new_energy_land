@@ -5,7 +5,7 @@
 @Author  : weiyutao
 @File    : run.py
 
-统一 CLI 入口（原 wind/run_wind.py 与 solar/run_solar.py 合并）：
+统一 CLI 入口：
 python run.py wind|solar 配置.json
 
 薄壳：配置 JSON 交给业务层唯一入口 biz.runner.run，写 CSV 与结果 JSON 均由其

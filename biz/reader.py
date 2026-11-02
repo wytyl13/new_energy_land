@@ -27,6 +27,10 @@ from .years import YearsPlan
 logger = logging.getLogger(__name__)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 取数编排（构造算法配置与输入序列）
+# ─────────────────────────────────────────────────────────────────────────────
+
 class Reader:
     """取数与算法配置构造：数据目录 → 内存序列 + WindConfig/SolarConfig。
 
@@ -70,7 +74,7 @@ class Reader:
 
         # 2. 输出年温压：+8h 转北京时间、对齐输出年整点、缺失处时间插值
         year = req.scenario.year
-        logger.info("[6/6] 物理出力计算: 读取 %d 年温度/气压格点...", year)
+        logger.info("[1/6] 读取 %d 年温度/气压格点（物理出力输入）...", year)
         axis = pd.date_range(f"{year}-01-01", f"{year}-12-31 23:00:00", freq="h")
         temp_by_city = grids("temperature", [year], direct_unit)
         pressure_by_city = grids("pressure", [year], direct_unit)

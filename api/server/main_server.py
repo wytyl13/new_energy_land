@@ -30,6 +30,10 @@ from api.routers import solar_router, wind_router
 logger = logging.getLogger(__name__)
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 服务装配（lifespan / 跨域 / gzip / 请求日志）
+# ─────────────────────────────────────────────────────────────────────────────
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     logger.info("服务启动: 路由 wind/solar run + health")
@@ -59,6 +63,10 @@ async def log_requests(request: Request, call_next):
     logger.info("%s %s -> %s (%.1fs)", request.method, request.url.path, response.status_code, elapsed)
     return response
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 健康检查与异常映射
+# ─────────────────────────────────────────────────────────────────────────────
 
 @app.get("/api/health")
 async def health() -> dict:
@@ -90,6 +98,10 @@ async def global_exception_handler(request: Request, exc: Exception) -> JSONResp
         },
     )
 
+
+# ─────────────────────────────────────────────────────────────────────────────
+# 路由注册与启动入口
+# ─────────────────────────────────────────────────────────────────────────────
 
 app.include_router(wind_router.router)
 app.include_router(solar_router.router)

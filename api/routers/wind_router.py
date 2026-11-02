@@ -19,6 +19,10 @@ from fastapi import APIRouter, Body
 from api.response import make_response
 from biz.runner import run
 
+# ─────────────────────────────────────────────────────────────────────────────
+# 风电路由（POST /api/wind/run）
+# ─────────────────────────────────────────────────────────────────────────────
+
 router = APIRouter(prefix="/api/wind", tags=["Wind"])
 
 
