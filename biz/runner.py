@@ -22,7 +22,7 @@ from new_energy.wind import run_wind
 
 from .assignment import Assignment
 from .export import Export
-from .grids import GridData
+from .grids import GridData, SEA_UNIT
 from .reader import Reader
 from .schema import Schema
 
@@ -50,6 +50,7 @@ class Runner:
         self.kind = kind
         self.direct_unit = None
 
+
     def request(self, source: dict | str | Path):
         """Schema 解析 + 单元名匹配（D-29）+ 光伏经纬度补全 → 请求对象。
 
@@ -60,10 +61,11 @@ class Runner:
             RequestBase: 请求对象（光伏 city_configs 已含补全的经纬度）。
         """
         req = Schema(self.kind)(source)
+        assignment = Assignment(req.assignment_file)
         # 单元名匹配规则（D-29，D-53）：全命中 → 归属表给格点；部分命中 → 未命中的
         # 无格点单元跳过并告警（如东城区）；单单元未命中 → 合法自定义区域，
         # 格点 = 传入数据中声明前缀的全部格点列；多单元全部未命中 → 报错
-        unmatched = [city for city in req.city_configs if city not in Assignment(req.assignment_file).keys]
+        unmatched = [city for city in req.city_configs if city not in assignment.keys]
         if unmatched and len(unmatched) == len(req.city_configs) and len(unmatched) > 1:
             raise ValueError(f"city_configs 含归属表之外的地市: {unmatched}")
         if unmatched and len(unmatched) < len(req.city_configs):
@@ -75,19 +77,30 @@ class Runner:
         if self.direct_unit:
             logger.info("单单元 %s 未命中归属表，按传入数据全部格点列聚合", self.direct_unit)
 
+        if self.kind == "wind":
+            # 海风配置核对（D-57）：匹配后单元含海格点 → sea_configs 必传（防海风出力静默丢失）；
+            # 无海格点却传了 → 报错（自定义区域同理，暂不拆海陆）
+            has_sea = any(assignment.sea_coords(u) for u in req.city_configs)
+            if has_sea and req.sea_configs is None:
+                raise ValueError("请求单元含海格点，缺少 sea_configs（海风机组配置）")
+            if not has_sea and req.sea_configs is not None:
+                raise ValueError("请求单元无海格点，sea_configs 不适用")
+
         if self.kind == "solar":
             # 补 latitude/longitude 缺省：命中单元用归属表格点中心，未命中的单单元用数据格点坐标均值
-            centers = Assignment(req.assignment_file).centers
+            known_units = set(assignment.coord_units)
             for city, unit in req.city_configs.items():
                 if unit.latitude is not None:
                     continue
                 center = (GridData(req.data_dir, req.assignment_file,
                                    prefixes=req.variable_prefixes).center("solar")
-                          if city == self.direct_unit else centers.get(city))
+                          if city == self.direct_unit
+                          else (assignment.centers(city) if city in known_units else None))
                 if center is None:
                     raise ValueError(f"city_configs 未提供 {city} 的 latitude/longitude，且归属表无该地市格点中心")
                 req.city_configs[city] = dataclasses.replace(unit, latitude=center[0], longitude=center[1])
         return req
+
 
     def result(self, source: dict | str | Path):
         """请求 → 取数 → 算法全流程（不写文件），供回归自测取场景与出力。
@@ -99,6 +112,7 @@ class Runner:
             WindResult | SolarResult: 算法侧结果对象（scenarios/power/classes[/metrics]）。
         """
         return self._model(self.request(source))
+
 
     def forward(self, source: dict | str | Path) -> dict:
         """全流程：校验 → 取数 → 算法 → 写出力 CSV → 结果 JSON。
@@ -114,13 +128,19 @@ class Runner:
         req = self.request(source)
         return Export(self.kind, req)(self._model(req), start)
 
+
     __call__ = forward
+
 
     def _model(self, req):
         """Reader 取数 → 算法模型 → 结果对象（风/光各自的 run_* 入口，进程池并行）。"""
         config, series = Reader(self.kind)(req, self.direct_unit)
         run = run_wind if self.kind == "wind" else run_solar
-        return run(config, *series, req.city_configs)
+        # 风电海陆拆分（D-55）：海风区域一组，作为独立单元键进并行池（机组表补 sea 键）
+        units = req.city_configs
+        if self.kind == "wind" and req.sea_configs is not None:
+            units = {**req.city_configs, SEA_UNIT: req.sea_configs}
+        return run(config, *series, units)
 
 
 def run(kind: str, source: dict | str | Path) -> dict:

@@ -67,6 +67,18 @@ class WindCityConfig(WindUnit):
 
 
 @dataclass(frozen=True)
+class WindSeaConfig(WindUnit):
+    """风电 sea_configs 对象（区域海风一组，不区分城市）：region 标记 + 机组配置同层（D-57）。"""
+
+    region: str = "sea"
+
+    def __post_init__(self) -> None:
+        super().__post_init__()
+        if self.region != "sea":
+            raise ValueError("sea_configs.region 必须是 sea")
+
+
+@dataclass(frozen=True)
 class SolarCityConfig(SolarUnit):
     """光伏 city_configs 数组项：city + 组件配置同层（city 默认空串是继承字段序约束，__post_init__ 查非空）。"""
 
@@ -98,9 +110,10 @@ class RequestBase:
 
 @dataclass(frozen=True)
 class WindRequest(RequestBase):
-    """风电请求：共有信封 + evaluate。"""
+    """风电请求：共有信封 + evaluate + sea_configs（区域海风机组配置，None = 无海格点，D-57）。"""
 
     evaluate: bool = False
+    sea_configs: WindSeaConfig | None = None
 
     def __post_init__(self) -> None:
         super().__post_init__()
@@ -156,7 +169,8 @@ class Schema:
             raise ValueError("配置文件根必须是 JSON 对象")
 
         # 2 city_configs：缺省读服务端默认机组；逐项直接构造（未知/缺字段 → TypeError，范围 → __post_init__）
-        if "city_configs" not in payload:
+        city_defaulted = "city_configs" not in payload
+        if city_defaulted:
             default_configs = _BIZ_DIR / f"default_city_configs_{self.kind}.json"
             payload = {**payload, "city_configs": json.loads(
                 default_configs.read_text(encoding="utf-8"))["city_configs"]}
@@ -170,6 +184,21 @@ class Schema:
             if entry.city in city_configs:
                 raise ValueError(f"city_configs 存在重复地市: {entry.city}")
             city_configs[entry.city] = entry
+
+        # 2b sea_configs（仅风电，D-57）：city_configs 走默认且未传 → 读服务端默认海风机组
+        #     （显式传了 city_configs 时缺省保持 None，有海格点与否由 Runner 核对报错）
+        if self.kind == "wind":
+            if "sea_configs" not in payload and city_defaulted:
+                default_sea = _BIZ_DIR / "default_sea_config_wind.json"
+                payload = {**payload, "sea_configs": json.loads(
+                    default_sea.read_text(encoding="utf-8"))["sea_configs"]}
+                logger.info("sea_configs 未传且 city_configs 走默认，使用默认海风机组配置: %s", default_sea.name)
+            if "sea_configs" in payload:
+                raw_sea = payload["sea_configs"]
+                if not isinstance(raw_sea, dict):
+                    raise ValueError("sea_configs 必须是单个 JSON 对象")
+                payload = {**payload, "sea_configs": WindSeaConfig(
+                    **{**raw_sea, "turbines": tuple(Turbine(**t) for t in raw_sea["turbines"])})}
 
         # 3 构造请求对象：缺省字段走类默认值；str 路径转 Path
         if "scenario" not in payload:

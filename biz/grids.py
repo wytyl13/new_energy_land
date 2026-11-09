@@ -20,6 +20,8 @@ from .constants import ENC, KIND_PREFIX
 
 logger = logging.getLogger(__name__)
 
+SEA_UNIT = "sea"  # 海陆拆分模式下区域海风组的单元键（风电路径，D-55）
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 格点取数与聚合（单元 → 地市序列）
@@ -29,7 +31,8 @@ class GridData:
     """格点数据源：按 (类型, 年份) 查询单元序列与代表坐标。"""
 
     def __init__(self, grid_dir: Path, assignment_csv: Path,
-                 units: set[str] | None = None, prefixes: dict[str, str] | None = None):
+                 units: set[str] | None = None, prefixes: dict[str, str] | None = None,
+                 sea_split: bool = False):
         """读归属表一遍、按请求单元集过滤一遍（查询时不再重复读表）。
 
         Args:
@@ -37,16 +40,30 @@ class GridData:
             assignment_csv (Path): 全国格点地市归属表。
             units (set[str] | None): 请求单元集（查询产出后核对），None = 表内全部单元。
             prefixes (dict[str, str] | None): 类型 → 声明变量前缀，缺省 KIND_PREFIX。
+            sea_split (bool): 海陆拆分（风电路径）：城市只聚陆格点，另产区域海组一条
+                （SEA_UNIT 键）；纯海单元陆风侧跳过并告警；缺省 False = 全格点口径。
         """
         # 1. 数据目录与前缀声明
         self.grid_dir = grid_dir
         self.prefixes = prefixes or {}
         self.units = set(units) if units is not None else None
 
-        # 2. 归属表坐标一遍读好，按请求单元集过滤
-        self.coords_by_city = Assignment(assignment_csv).coords
-        if self.units is not None:
-            self.coords_by_city = {k: v for k, v in self.coords_by_city.items() if k in self.units}
+        # 2. 归属表一遍读好，目标单元 = 有 inside 格点的单元 ∩ 请求单元集
+        self.assignment = Assignment(assignment_csv)
+        self.target_units = [u for u in self.assignment.coord_units
+                             if self.units is None or u in self.units]
+
+        # 3. 海陆拆分预解析（sea_split=True）：陆单元、纯海跳过单元、区域海组坐标并集
+        self.sea_split = sea_split
+        self.land_units: list[str] = []
+        self.skipped_sea_only: list[str] = []
+        self.sea_union: list[tuple[float, float]] = []
+        if sea_split:
+            self.land_units = [u for u in self.target_units if self.assignment.land_coords(u)]
+            self.skipped_sea_only = [u for u in self.target_units if not self.assignment.land_coords(u)]
+            if self.skipped_sea_only:
+                logger.warning("纯海单元无陆格点，陆风侧跳过、海格点并入区域海组: %s", self.skipped_sea_only)
+            self.sea_union = [pt for u in self.target_units for pt in self.assignment.sea_coords(u)]
 
     def forward(self, kind: str, years: range | list[int] | tuple[int, ...],
                 single_unit: str | None = None) -> dict[str, pd.Series]:
@@ -66,8 +83,16 @@ class GridData:
         """
         prefix = self.prefixes.get(kind) or KIND_PREFIX[kind]
 
-        # 1. 确定目标单元容器：未命中单元 → 单单元；否则归属表全部单元
-        pieces = {single_unit: []} if single_unit else {k: [] for k in self.coords_by_city}
+        # 1. 确定目标单元容器：未命中单元 → 单单元；海陆拆分 → 陆单元 + 海组（有点才建）；
+        #    否则归属表全部单元
+        if single_unit:
+            pieces = {single_unit: []}
+        elif self.sea_split:
+            pieces = {k: [] for k in self.land_units}
+            if self.sea_union:
+                pieces[SEA_UNIT] = []
+        else:
+            pieces = {k: [] for k in self.target_units}
         single_columns: list[str] | None = None
 
         # 2. 逐年读文件按单元取列求格点均值
@@ -95,9 +120,13 @@ class GridData:
                         raise ValueError(f"{path.name} 缺少 {unit} 的格点列: {missing[:3]}...")
                     cols = single_columns
                 else:
-                    # 模式 B：命中归属表，按单元格点坐标逐点匹配列
+                    # 模式 B：命中归属表，按单元/海组格点坐标逐点匹配列
+                    #   （海组取并集坐标；拆分时城市只取陆格点）
+                    pts = (self.sea_union if unit == SEA_UNIT
+                           else self.assignment.land_coords(unit) if self.sea_split
+                           else self.assignment.coords(unit))
                     cols = []
-                    for lat, lon in self.coords_by_city[unit]:
+                    for lat, lon in pts:
                         candidates = lookup.get((round(lat, 2), round(lon, 2)), [])
                         match = [col for p, col in candidates if p == prefix]
                         if not match:
@@ -111,9 +140,12 @@ class GridData:
                 values = df[cols].apply(pd.to_numeric, errors="coerce").mean(axis=1)
                 pieces[unit].append(pd.Series(values.to_numpy(float), index=time_idx, name=unit))
 
-        # 3. 请求单元集与产出核对：配置了但归属表/数据没有的单元在此报错（数值红线）
-        if self.units is not None and (missing := sorted(self.units - set(pieces))):
-            raise ValueError(f"city_configs 含数据范围之外的地市键: {missing}")
+        # 3. 请求单元集与产出核对：配置了但归属表/数据没有的单元在此报错（数值红线；
+        #    纯海单元陆风侧跳过属预期，不在此报错）
+        if self.units is not None:
+            covered = set(pieces) | set(self.skipped_sea_only)
+            if missing := sorted(self.units - covered):
+                raise ValueError(f"city_configs 含数据范围之外的地市键: {missing}")
         return {key: pd.concat(parts).sort_index() for key, parts in pieces.items()}
 
     __call__ = forward

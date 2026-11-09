@@ -1,0 +1,19 @@
+{
+  "sea_configs": {
+    "region": "sea",
+    "capacity_mw": 20,
+    "turbines": [
+      {
+        "model": "6MW海上机组",
+        "count": 1,
+        "rated_power_mw": 6,
+        "hub_height_m": 140,
+        "cut_in_m_s": 3,
+        "rated_m_s": 11,
+        "cut_out_m_s": 25,
+        "efficiency": 0.94,
+        "wind_shear_exponent": 0.7
+      }
+    ]
+  }
+}

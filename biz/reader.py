@@ -62,9 +62,9 @@ class Reader:
     __call__ = forward
 
     def _wind(self, req: RequestBase, direct_unit: str | None):
-        """风电取数：风速历史序列 + 输出年温压（北京时间口径）。"""
+        """风电取数：风速历史序列 + 输出年温压（北京时间口径，海陆拆分 D-55）。"""
         grids = GridData(req.data_dir, req.assignment_file, units=set(req.city_configs),
-                         prefixes=req.variable_prefixes)
+                         prefixes=req.variable_prefixes, sea_split=True)
 
         # 1. 历史年份方案：期望窗口 ∩ 实际存在的年份（wind 单一类型）
         plan = YearsPlan(req.data_dir, ("wind",))

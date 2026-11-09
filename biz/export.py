@@ -43,6 +43,7 @@ class Export:
         self.kind = kind
         self.req = req
 
+
     def forward(self, result, start: float) -> dict:
         """选景出表、写 CSV、组装结果 JSON。
 
@@ -59,7 +60,7 @@ class Export:
         power = result.power[case]
         if self.kind == "wind":
             table = self._wind_table(power)
-            out_path = self.req.output_dir / f"onshore_wind_power_{self.req.scenario.year}_{case}.csv"
+            out_path = self.req.output_dir / f"wind_power_{self.req.scenario.year}_{case}.csv"
         else:
             table = self._solar_table(power)
             out_path = self.req.output_dir / f"pv_power_{self.req.scenario.year}_{case}.csv"
@@ -71,16 +72,21 @@ class Export:
         time_col = "time" if self.kind == "wind" else "时间"
         table = table.copy()
         table[time_col] = table[time_col].astype(str)
+        # 风电海陆拆分（D-58）：总装机含海风一组（光伏无 sea_configs 字段，getattr 兜底）
+        sea = getattr(self.req, "sea_configs", None)
+        sea_capacity = sea.capacity_mw if sea is not None else 0.0
         return {
             "output_file": str(out_path),
             "elapsed_s": round(time.perf_counter() - start, 2),
             "scenario": {"year": self.req.scenario.year, "resource_year_type": case},
             "cities": list(next(iter(result.scenarios.values()))),
-            "total_capacity_mw": round(sum(c.capacity_mw for c in self.req.city_configs.values()), 6),
+            "total_capacity_mw": round(sum(c.capacity_mw for c in self.req.city_configs.values()) + sea_capacity, 6),
             "power_table": table.to_dict("list"),
         }
 
+
     __call__ = forward
+
 
     def _wind_table(self, result: PowerResult) -> pd.DataFrame:
         """风电结果对象 → 冻结列集出力表（time、省风速、省出力 MW/pu、{地市}_power_mw）。"""
@@ -98,11 +104,14 @@ class Export:
         return out
 
     def _solar_table(self, result: PowerResult) -> pd.DataFrame:
-        """光伏结果对象 → 冻结列集出力表（时间、{地市}_总出力_MW、区域总出力 MW/pu）。"""
+        """光伏结果对象 → 冻结列集出力表（时间、{地市}_总出力_MW、区域总出力 MW/pu、DNI 列 D-59）。"""
         data: dict = {"时间": result.index}
         if self.req.output_city_power:
             for city, values in result.city_power.items():
                 data[f"{city}_总出力_MW"] = values
+            for city, values in result.city_dni.items():
+                data[f"{city}_DNI_W_m2"] = values # 20261109新增各地市DNI
         data["区域总出力_MW"] = result.total_power_mw
         data["区域总出力_pu"] = result.total_power_pu
+        data["区域DNI_W_m2"] = result.total_dni # 20261109新增全省DNI
         return pd.DataFrame(data)

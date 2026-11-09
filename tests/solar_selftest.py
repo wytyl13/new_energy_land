@@ -165,7 +165,7 @@ def case_defaults() -> None:
     for field in ("latitude", "longitude"):
         payload["city_configs"][0].pop(field)
     omitted = Runner("solar").request(payload)
-    center = Assignment(omitted.assignment_file).centers[CITY]
+    center = Assignment(omitted.assignment_file).centers(CITY)
     got = omitted.city_configs[CITY]
     assert (got.latitude, got.longitude) == center, "缺省经纬度应为地市格点中心"
     # 文件与 dict 两种形态解析等价

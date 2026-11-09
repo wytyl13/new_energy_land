@@ -21,6 +21,7 @@ pip install -r requirements.txt
 ```bash
 # CLI（仓库根目录）
 python run.py wind tests/fixtures/wind_minimal.json   # 风电，单市约 20s，全省约 4 分钟
+python run.py wind tests/fixtures/wind_sea.json       # 风电海陆：儋州陆风 + 区域海风一组（sea_configs）
 python run.py solar tests/fixtures/solar_danzhou.json # 光伏，儋州约 1 分钟
 
 # HTTP 服务（端点与请求/返回示例见 API.md）
@@ -30,7 +31,7 @@ python -m api.server.main_server --port 9998          # 端口默认 9998
 python -c "from biz.runner import run; print(run('wind', 'tests/fixtures/wind_minimal.json'))"
 ```
 
-配置模板：`.refactor_baseline/config.json`（全省）、`tests/fixtures/`（单市/最简/自定义区域）。请求字段表见 [API.md](API.md)。
+配置模板：`.refactor_baseline/config.json`（全省）、`tests/fixtures/`（单市/最简/自定义区域/海陆）。请求字段表见 [API.md](API.md)。
 
 ## 测试
 

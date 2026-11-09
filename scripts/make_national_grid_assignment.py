@@ -9,7 +9,8 @@
 （geo.datav.aliyun.com，逐省下载）→ 点在多边形判断 → 全国格点地市归属.csv。
 
 约定（与用户确认）：
-    - 与海陆表分开放，只共享坐标键（中心纬度_N/中心经度_E，两位小数，utf-8-sig）
+    - 与海陆表分开放；共享坐标键（中心纬度_N/中心经度_E，两位小数，utf-8-sig）
+      并透传其海陆判定列（0=陆 1=海，含内陆湖点，2026-11-09 与用户确认）
     - 只存坐标不存格点列名；只写 inside 行，海点/境外点不指派（不写 nearest）
     - 直辖市取下一级区县子要素（bound/{code}_full.json；0 格点的区不建单元——
       无数据即无单元，不借点）；港澳台整体作为一个单元（bound/{code}.json 单要素）；
@@ -184,11 +185,13 @@ def main() -> None:
             "city_code": np.array(ccode, dtype=object)[owner[assigned]],
             "city": np.array(cname, dtype=object)[owner[assigned]],
             "assignment_method": "inside",
+            "海陆判定": grid["海陆判定"].to_numpy(int)[assigned],
         }
     ).sort_values(["中心纬度_N", "中心经度_E"], ascending=[False, True])
     if out.duplicated(["中心纬度_N", "中心经度_E"]).any():
         raise ValueError("输出存在重复格点行")
-    out.to_csv(OUT_CSV, index=False, encoding="utf-8-sig", float_format="%.2f")
+    out.to_csv(OUT_CSV, index=False, encoding="utf-8-sig", float_format="%.2f",
+               lineterminator="\n")  # 仓库约定 eol=lf（.gitattributes），钉死免平台差异
 
     print(f"\n单元总数 {len(units)}；归属格点 {int(assigned.sum())} / {len(pts)}"
           f"（国界内格点 {int(china.sum())}，海陆表陆地格点 {int(land.sum())}，"

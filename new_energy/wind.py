@@ -639,7 +639,7 @@ class WindModel:
         """
         worker_logging()
 
-        #步骤1 Series(UTC, 全量年) → (对齐序列, (N, 8760), 年标签)
+        #步骤1 Series(UTC, 全量年) → (对齐序列, (N, 8760), 年标签) 
         aligned, grid, years = self.align(wind)
 
         #步骤2 (N, 8760) → (N, ) 资源年类型标签（逐年平均风速立方，训练年 P25/P75 分三类，最后一年也参与归类）

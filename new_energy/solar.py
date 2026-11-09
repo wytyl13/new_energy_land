@@ -536,7 +536,8 @@ class Physics:
         city_scenes: dict[str, np.ndarray],
         temp_clim: np.ndarray,
         unit: SolarUnit,
-    ) -> dict[str, np.ndarray]:
+    ) -> tuple[dict[str, np.ndarray], dict[str, np.ndarray]]:
+        # 20261109修改↑
         """单单元各 case GHI + 温度气候态 + 组件配置 → 逐 case 出力 MW（轴年轴，含损耗）。
 
         Args:
@@ -545,26 +546,32 @@ class Physics:
             unit (SolarUnit): 装机与组件配置对象。
 
         Returns:
-            dict[str, np.ndarray]: case → 出力 MW (8760, )。
+            tuple[dict[str, np.ndarray], dict[str, np.ndarray]]: (case → 出力 MW (8760, ),
+            case → DNI (W/m2, 8760, )，与组件倾角/方位角无关)。
         """
         temp_c = temp_clim - 273.15 # (8760, ) 摄氏温度
+        dc_capacity = unit.capacity_mw * unit.dc_ac_ratio # 20261109新增，交流侧额定容量 × 容配比 = 直流侧装机容量
         configured = sum(c.count * c.rated_power_mw for c in unit.components) # 标量 组件配置总装机
-        scale = unit.capacity_mw / max(configured, 1e-9) # 标量 容量等比缩放系数
+        scale = dc_capacity / max(configured, 1e-9) # 标量 容量等比缩放系数# 20261109修改
 
         power: dict[str, np.ndarray] = {}
+        dni_by_case = {}  # 20261109新增
         for case, ghi in city_scenes.items():
             # 1. 逐组件出力叠加——POA 转置 + NOCT 组件温度 + 功率温度系数 → (8760, ) MW
             city_mw = np.zeros(len(ghi)) # (8760, )
+            case_dni = None# 20261109新增
             for comp in unit.components:
-                g = self._poa(ghi, unit.latitude, unit.longitude, comp.tilt_deg, comp.azimuth_deg) # (8760, )
+                g, dni = self._poa(ghi, unit.latitude, unit.longitude, comp.tilt_deg, comp.azimuth_deg) # (8760, )# 20261109修改新增dni
+                if case_dni is None: case_dni = dni.copy()# # 20261109修改新增dni DNI与组件倾角、方位角无关，每个地市每个年景保存一次
                 tc = temp_c + (comp.noct_c - 20) / 800 * g # (8760, ) 组件温度 °C
                 city_mw += (
                     comp.count * comp.rated_power_mw * scale * self.loss_factor
                     * comp.efficiency
                     * np.clip(g / 1000 * (1 + comp.gamma_p_per_c * (tc - 25)), 0, 1.2)
                 )
-            power[case] = city_mw # (8760, ) 单元 MW（含损耗）
-        return power
+            power[case] = np.minimum(np.maximum(city_mw, 0.0),unit.capacity_mw) # (8760, ) 单元 MW（含损耗）# 20261109修改，交流侧功率封顶
+            dni_by_case[case] = case_dni# 20261109修改新增dni
+        return power, dni_by_case# 20261109修改新增dni
 
     def _poa(
         self,
@@ -573,7 +580,8 @@ class Physics:
         longitude: float,
         tilt_deg: float,
         azimuth_deg: float,
-    ) -> np.ndarray:
+    ) -> tuple[np.ndarray, np.ndarray]:
+        # 20261109修改新增↑
         """水平面辐照度 → 组件倾斜面辐照度（POA）：直射 + 散射 + 地面反照。
 
         Args:
@@ -584,7 +592,8 @@ class Physics:
             azimuth_deg (float): 组件方位角（度）。
 
         Returns:
-            np.ndarray: 倾斜面辐照度 (8760, )（W/m2），非负。
+            tuple[np.ndarray, np.ndarray]: (倾斜面辐照度 (8760, )（W/m2，非负）,
+            法面直接辐射 DNI (8760, )（W/m2）)。
         """
         n = self.target_index.dayofyear.to_numpy()
         h = self.target_index.hour.to_numpy() + self.target_index.minute.to_numpy() / 60
@@ -597,16 +606,23 @@ class Physics:
         az = np.deg2rad(azimuth_deg)
         # 1. 直射分量：GHI ÷ 高度角余弦（低角度截 0.02 防放大）
         safe = np.maximum(cz, 0.02)
-        dni = np.divide(ghi, safe, out=np.zeros_like(ghi), where=cz > 0)
+
         # 2. 散射分量：晴空指数经验式估计散射比例
         kd = np.where(ghi > 20, np.clip(1 - 1.13 * np.clip(ghi / (1367 * safe), 0, 1), 0.05, 1), 1)
         dhi = kd * ghi
+        dni = np.divide(np.maximum(ghi - dhi, 0.0),safe,out=np.zeros_like(ghi),where=cz > 0)
         # 3. 入射角 + 直射/散射/反照三分量合成
         ci = np.cos(z) * np.cos(beta) + np.sin(z) * np.sin(beta) * np.cos(az - np.pi)
-        return np.maximum(
+        poa = np.maximum(
             0,
-            dni * np.maximum(ci, 0) + dhi * (1 + np.cos(beta)) / 2 + self.albedo * ghi * (1 - np.cos(beta)) / 2,
-        )
+            dni * np.maximum(ci, 0)
+            + dhi * (1 + np.cos(beta)) / 2
+            + self.albedo * ghi * (1 - np.cos(beta)) / 2,
+        )# 20261109修改 新增dni输出
+        return poa, dni# 20261109修改 新增dni输出
+
+
+
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -678,8 +694,8 @@ class SolarModel:
 
         #步骤7 温度气候态：训练年 UTC 温度 → +8h 删闰日 → 8760 小时多年均值 → 轴年物理出力（重排输出年在 run_solar）
         temp_clim = weather_climatology(temp, self.config.train_years).to_numpy(float) # (8760, )
-        power = self.physics(dict(zip(RESOURCE_YEAR_TYPES, scenes)), temp_clim, unit)
-        return city, labels, scenarios, power, len(events.details), phi
+        power, dni = self.physics(dict(zip(RESOURCE_YEAR_TYPES, scenes)), temp_clim, unit)# 20261109新增全省DNI
+        return city, labels, scenarios, power, dni, len(events.details), phi# 20261109新增全省DNI
 
     __call__ = forward
 
@@ -715,10 +731,14 @@ def run_solar(
     scenarios_axis: dict[str, dict[str, pd.Series]] = {}
     classes_all: dict[str, np.ndarray] = {}
     power_by_city: dict[str, dict[str, np.ndarray]] = {}
-    for i, (city, labels, city_scenarios, city_power, n_events, phi) in enumerate(results, 1):
+    
+    # 20261109新增全省DNI
+    dni_by_city = {}
+    for i, (city, labels, city_scenarios, city_power, city_dni, n_events, phi) in enumerate(results, 1):
         logger.info("[2-4/4] 地市 %d/%d %s: 完成 (事件库 %d 个, GPR残差lag1 φ=%.2f)", i, total, city, n_events, phi)
         classes_all[city] = labels
         power_by_city[city] = city_power
+        dni_by_city[city] = city_dni # 20261109 新增全省DNI
         for case, scenario in city_scenarios.items():
             scenarios_axis.setdefault(case, {})[city] = scenario
 
@@ -730,15 +750,22 @@ def run_solar(
     for case, city_scenarios in scenarios_axis.items():
         region_total = np.zeros(len(axis_index)) # (8760, ) 区域出力累加器
         city_power: dict[str, np.ndarray] = {}
+        city_dni = {}
         for city in city_scenarios:
             city_power[city] = power_by_city[city][case]
             region_total += city_power[city] # 单元求和 → 区域 MW
+            city_dni[city] = dni_by_city[city][case]
+
+        values = np.stack(list(city_dni.values()), axis=0) # 20261109新增全省DNI：各地市逐小时算术平均
+        region_dni = np.mean(values, axis=0) # 20261109新增全省DNI：各地市逐小时算术平均
         power_axis[case] = PowerResult(
             index=axis_index,
             city_power=city_power,
             total_power_mw=region_total,
             total_power_pu=region_total / total_capacity,
-        )
+            city_dni=city_dni,
+            total_dni=region_dni,
+        ) # 20261109新增DNI
 
     # 重排输出年（闰年补 2 月 29 日）：场景与出力同为输出年轴
     logger.info("[4/4] 重排输出年 %d...", year)
@@ -755,8 +782,11 @@ def run_solar(
             },
             total_power_mw=remap_to_year(pd.Series(r.total_power_mw, index=r.index), year).to_numpy(float),
             total_power_pu=remap_to_year(pd.Series(r.total_power_pu, index=r.index), year).to_numpy(float),
-        )
+            city_dni={city: remap_to_year(pd.Series(values, index=r.index), year).to_numpy(float)for city, values in r.city_dni.items()},
+            total_dni=remap_to_year(pd.Series(r.total_dni, index=r.index), year).to_numpy(float),
+        ) # 20261109 新增 DNI
         for case, r in power_axis.items()
     }
+
     logger.info("[4/4] 完成: %s", {case: f"{len(r.index)}小时×{1 + len(r.city_power)}列" for case, r in power.items()})
     return SolarResult(scenarios=scenarios, power=power, classes=classes_all)

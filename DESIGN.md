@@ -32,7 +32,7 @@
 | 辐照格点 CSV | (N, 8760, G_s) | W/m²，UTC | 光伏历史 |
 | 温度格点 CSV | (N, 8760, G_t) | K | 光伏读训练年（气候态） |
 | 归属表 | (C,) 表 | — | 单元 → 严格边界内格点坐标 |
-| 装机配置 | (C,) 表 | — | 单元 → capacity_mw + turbines[M] \| components[K] |
+| 装机配置 | (C,) 表 | — | 单元 → capacity_mw + turbines[M] \| components[K] + dc_ac_ratio（光，D-59） |
 
 维度总流转：
 
@@ -95,13 +95,13 @@
 
 - remap 到输出年 (T_out,)：闰年时间插值补 2/29，场景数值不变；风 = 重排后物理出力，光 = 轴年物理出力后重排（辐照随日历走，顺序不可换）
 - 风：切变 $v_{hub} = v \cdot (h/100)^{\alpha}$；温压 → 轮毂密度比 $\rho/\rho_0$；立方曲线 $\frac{v^3 - v_{in}^3}{v_r^3 - v_{in}^3}$；多机型 $\sum_m \mathrm{count}_m \cdot \mathrm{rated}_m \cdot \mathrm{scale}_m$ → ×loss_factor → 单元出力 (T_out,)
-- 光：GHI → POA（直射+散射+地面反射）→ NOCT 组件温度 → $\frac{g}{1000}\left(1 + \gamma\,(t_c - 25)\right)$；多组件同式叠加 → ×loss_factor → 单元出力 (T_out,)
+- 光：GHI → DNI/DHI 分解（DNI = max(GHI−DHI, 0)/cos z，D-59）→ POA（直射+散射+地面反射）→ NOCT 组件温度 → $\frac{g}{1000}\left(1 + \gamma\,(t_c - 25)\right)$；多组件同式叠加（scale 基数 = 直流侧 capacity_mw×dc_ac_ratio）→ ×loss_factor → 交流侧封顶 [0, capacity_mw] → 单元出力 (T_out,)
 - 单元求和 → 全省/区域表
 
 输出（CSV + JSON power_table 双份，同列同值；b=output_city_power∈{0,1}）：
 
 - 风电出力表 (T_out, 4+C·b)：time、省风速（容量加权）、省出力 MW/pu、{单元}_power_mw
-- 光伏出力表 (T_out, 3+C·b)：时间、区域出力 MW/pu、{单元}_总出力_MW
+- 光伏出力表 (T_out, 4+2C·b)：时间、区域出力 MW/pu、区域DNI、{单元}_总出力_MW、{单元}_DNI_W_m2（DNI 列 D-59）
 
 不变量：
 
@@ -117,7 +117,7 @@
 | 接口 | `api/routers/wind_router.py`、`solar_router.py` | POST `/run` 透传统一 JSON 给 `biz.runner.run`，不重复校验 |
 | 接口 | `run.py` | 薄 CLI：`python run.py wind/solar 配置.json` → `biz.runner.run` |
 | 业务 | `biz/schema.py`                                                        | 统一 JSON 校验、默认值、机组配置构造（`Schema`/`RequestBase`）                                                      |
-| 业务 | `biz/assignment.py`                                                    | 全国归属表一遍读入（`Assignment`：keys/coords/centers，D-54）                                                         |
+| 业务 | `biz/assignment.py`                                                    | 全国归属表存一份，查询一行布尔索引（`Assignment`：keys/coord_units 属性 + coords/land_coords/sea_coords/centers 方法，D-54/D-56）|
 | 业务 | `biz/years.py`                                                         | 历史年份方案（`YearsPlan`：source/train/axis）                                                                        |
 | 业务 | `biz/grids.py`                                                         | 格点读取聚合（`GridData`：坐标键匹配、前缀身份校验、格点均值）                                                        |
 | 业务 | `biz/reader.py`                                                        | 取数编排 + 算法配置构造（`Reader`，D-51）                                                                             |
@@ -174,7 +174,7 @@
 - 单元名匹配（D-29、D-53）：单元名键 = DataV 行政区划码_城市名（如 `460100_海口市`）。全部命中 → 格点由归属表给出；部分命中 → 未命中的跳过并告警（无格点单元，如东城区）；多单元全部未命中 → `ValueError`；单单元未命中 → 合法自定义区域，格点 = 传入数据中声明前缀的全部格点列均值聚合。
 - `variable_prefixes: {kind: 前缀}`（风电 wind/temperature/pressure，光伏 solar/temperature）：列匹配按经纬度数值键（保留 2 位小数）查表，命中列前缀须等于声明前缀（变量身份校验，防 10m/100m 风速混装），不符报错指明坐标与现有前缀；容 `19.0/19.00` 格式差。
 - 光伏单元 `latitude`/`longitude` 可选：命中单元缺省 = 归属表格点中心；未命中的单单元缺省 = 数据格点坐标均值（`GridData.center`）。
-- 逐层未知字段拒绝；`scenario.year` 整数、`resource_year_type` 枚举；机型/组件 `count` 正整数、`rated_power_mw`>0，`efficiency`/`wind_shear_exponent` 缺省 1.0/0.15；lat ∈ [-90,90]、lon ∈ [-180,180]；重复单元报错；`data_dir` 须含所需子目录（风电 wind/temperature/pressure，光伏 solar/temperature）。
+- 逐层未知字段拒绝；`scenario.year` 整数、`resource_year_type` 枚举；机型/组件 `count` 正整数、`rated_power_mw`>0，`efficiency`/`wind_shear_exponent` 缺省 1.0/0.15，光伏 `dc_ac_ratio` 正数缺省 1.2（D-59，风电 `sea_configs` 见「海陆区分风电」节）；lat ∈ [-90,90]、lon ∈ [-180,180]；重复单元报错；`data_dir` 须含所需子目录（风电 wind/temperature/pressure，光伏 solar/temperature）。
 - 容量口径：`capacity_mw` 为权威值，机组/组件 count×rated 合计等比缩放到它（出处：docs/ref/新能源出力_陆上.md「地市容量与机组容量的实际关系」）。
 - 计算范围只由 `city_configs` 键决定；校验失败一律 `ValueError` 指明字段/文件/单元（服务层映射 400）。
 
@@ -185,11 +185,24 @@
 
 描述：Assignment → YearsPlan → GridData → Reader 四步，把格点 CSV 变成 (算法配置, 内存序列元组)（D-51）。
 
-- `Assignment`：全国表一遍读入 → keys（单元键集合）、coords（单元 → 边界内格点 (lat,lon) 列表）、centers（格点坐标均值）；仅认全国表（D-54），缺列即报错。
+- `Assignment`：全国表原始数据存一份（D-56）→ keys/coord_units 属性 + coords/land_coords/sea_coords/centers 方法（一行布尔索引现取）；仅认全国表（D-54），缺列即报错。
 - `YearsPlan`：期望窗口 ∩ 各类数据实际年份（风电=wind，光伏=solar∩temperature）→ 最大连续段，段外告警丢弃；逐年行数校验闰 8784/平 8760；年份数 ≥ `MIN_HISTORY_YEARS`；train_years = 除最后一年，axis_year = 最后一年（只当日历模板）。
 - `GridData`：按 (kind, year) 找 `*{kind}_{年}.csv`（匹配数 ≠ 1 报错）；坐标键逐点匹配归属格点列 + 前缀身份校验；格点均值聚合 → {单元: 逐年拼接 Series}（UTC、升序）；请求单元集与产出核对，缺者报错。
 - `Reader`：按 kind 编排上三步并构造 `WindConfig`/`SolarConfig`。风输出 3 项（风速历史 UTC；输出年温压 +8h 转北京、对齐输出年整点、时间插值），光输出 2 项（辐照历史、训练年温度，UTC 原口径，气候态换算在算法侧）。
 - 数值红线：缺列、缺值、缺文件、缺记录立即报错指明文件/单元；NaN/Inf 不进计算。
+
+### 海陆区分风电〔草案〕
+
+描述：陆风 = 城市级（每单元只聚合自己的陆格点），海风 = 区域级单单元（请求单元集内全部海格点并成一组）；算法包零改动，海风作为普通单元键 `sea` 走现有风电链路。
+
+- 数据源：归属表 `海陆判定` 列（D-55）；`Assignment` 原始表存一份（D-56），`land_coords(u)`/`sea_coords(u)` 一行布尔索引现取，`coords(u)`/`centers(u)` 维持全格点口径（光伏等沿用）；区域海组 = 请求内各单元海格点并集。
+- 聚合（GridData/Reader）：`{单元: 陆格点均值}`，另产区域海组一条（全部海格点均值）；温压同组走（海组温压 = 海格点均值）。陆格点为空的单元（舟山、三沙）跳过并告警（对齐 D-53），其海格点仍并入区域海组。
+- 请求：新增与 `city_configs` 平级的 `sea_configs = {"region": "sea", "capacity_mw": …, "turbines": [ …同 Turbine 字段… ]}`，多机组 = turbines 多项；`city_configs` 键与结构不变（陆风装机）。区域内有海格点而缺 `sea_configs` → 报错指明缺键；无海格点时省略合法、省略却配了 → 报错（配置与数据不符）。
+- 计算（Runner）：海风为独立任务键 `sea` 进 run_wind 并行池；省出力 = Σ城市陆风 + 海风，容量加权风速含海风容量，total_capacity_mw 含海风。
+- 结构查询接口：入参单元名列表，返回 `{units: [{unit, land_grid_count, sea_grid_count}…]}`，前端照此渲染：land_grid_count>0 的单元填城市机组配置；任一 sea_grid_count>0 则另填一份区域海风配置（sea_configs）；纯海单元（land_grid_count=0）不填城市机组，但仍须以 city_configs 键出现其海点才并入海组（机组字段不参与计算）。
+- 输出（Export）：CSV 增列 `sea_power_mw`（海风不拆城市，一列），province_* 列 = 陆+海合计；power_table、total_capacity_mw 同步含海。输出列集为冻结约定，实施前先记 DECISIONS。
+- 边界：自定义区域（单单元未命中）暂不拆海陆，维持全格点均值口径。
+- 口径变化：含海点单元的陆风序列不再混入海格点（51 单元数值变化），风自测基准按新口径重生成冻结；光伏不读海陆判定，不受影响。
 
 ### 风电模型〔草案〕（`new_energy/wind.py`）
 
@@ -232,7 +245,7 @@
 
 变量（`new_energy/constants.py`，冻结）：`RHO_REF`=1.225 kg/m³、`GAMMA`=0.0065 K/m、`GRAVITY`=9.80665 m/s²、`R_D`=287.05 J/(kg·K)。
 
-规则：风 = 切变 (h/100)^α → 轮毂风速；温压 → 轮毂 ρ/ρ0；立方曲线 (v³−vin³)/(vr³−vin³)；×count×rated×scale×loss_factor；`Physics` 只算单城市，区域汇总（逐城市出力累加 + 容量加权风速，城市累加顺序冻结）在 `run_wind`。光 = GHI→POA（直射+散射+地面反射 albedo）→ NOCT 组件温度 → g/1000×(1+γ(tc−25))；×count×rated×scale×loss_factor；`Physics` 只算单单元（轴年），区域汇总（逐单元出力累加，顺序冻结）与重排输出年在 `run_solar`。输出年 remap：闰年时间插值补 2/29，场景数值不变。
+规则：风 = 切变 (h/100)^α → 轮毂风速；温压 → 轮毂 ρ/ρ0；立方曲线 (v³−vin³)/(vr³−vin³)；×count×rated×scale×loss_factor；`Physics` 只算单城市，区域汇总（逐城市出力累加 + 容量加权风速，城市累加顺序冻结）在 `run_wind`。光 = GHI→DNI/DHI 分解（DHI = kd·GHI 晴空指数经验式，DNI = max(GHI−DHI, 0)/cos z——原部署源码为 DNI=GHI/cos z 全量直射、直射与散射项重复计入，D-59 纠偏）→POA（直射+散射+地面反射 albedo）→ NOCT 组件温度 → g/1000×(1+γ(tc−25))；×count×rated×scale×loss_factor，scale 基数 = 直流侧装机 capacity_mw×dc_ac_ratio；出力截 [0, capacity_mw]（交流侧封顶）；`Physics` 只算单单元（轴年）并返回逐 case DNI（与倾角无关，每单元每景一份），区域汇总（逐单元出力累加、DNI 算术平均，顺序冻结）与重排输出年在 `run_solar`。输出年 remap：闰年时间插值补 2/29，场景数值不变。
 
 输入：场景序列、输出年温压（风）、装机配置
 输出：`PowerResult`（各单元出力、全省/区域汇总、容量加权风速）
@@ -255,12 +268,12 @@
 | 输入         | 格式                                                                                                              |
 | :----------- | :---------------------------------------------------------------------------------------------------------------- |
 | 格点气象 CSV | `data_dir/{wind,solar,temperature,pressure}/*{类型}_{年}.csv`，UTC，time + `前缀_lat_XX.XX_lon_XXX.XX` 格点列 |
-| 格点归属表   | `data/全国格点地市归属.csv`（仅全国表，D-54）                                                                   |
+| 格点归属表   | `data/全国格点地市归属.csv`（仅全国表，D-54；末列海陆判定 0=陆 1=海、内陆湖点计海，D-55）                       |
 | 装机配置     | 统一 JSON`city_configs`（字段表见 API.md）                                                                      |
 
 ### 输出汇总〔草案〕
 
-- 风电 CSV：`onshore_wind_power_{year}_{case}.csv`，列 `time, province_wind_speed_m_s, province_power_mw, province_power_pu, {单元名}_power_mw×N`，闰 8784/平 8760 行
-- 光伏 CSV：`pv_power_{year}_{case}.csv`，列 `时间, {单元名}_总出力_MW×N, 区域总出力_MW, 区域总出力_pu`，8760 行
+- 风电 CSV：`wind_power_{year}_{case}.csv`（D-58 由 onshore_ 改名），列 `time, province_wind_speed_m_s, province_power_mw, province_power_pu, {单元名}_power_mw×N[, sea_power_mw]`（有海请求才有 sea 列，D-58），闰 8784/平 8760 行
+- 光伏 CSV：`pv_power_{year}_{case}.csv`，列 `时间, {单元名}_总出力_MW×N, {单元名}_DNI_W_m2×N, 区域总出力_MW, 区域总出力_pu, 区域DNI_W_m2`（DNI 列 D-59；{单元}_DNI 随 output_city_power），8760 行
 - 列集、行序、精度为冻结对外约定，改动前先记 DECISIONS.md；回归基准件 `.refactor_baseline/`
 - 返回 JSON：`output_file, elapsed_s, scenario, cities, total_capacity_mw, power_table`（字段表见 API.md）

@@ -141,10 +141,15 @@ class SolarUnit:
     latitude: float | None = None
     longitude: float | None = None
     components: tuple[SolarComponent, ...] = ()
+    dc_ac_ratio: float = 1.2  # 20261109新增直流/交流容配比
 
     def __post_init__(self) -> None:
         if self.capacity_mw <= 0:
             raise ValueError("capacity_mw 必须为正")
+        if (isinstance(self.dc_ac_ratio, bool)
+                or not isinstance(self.dc_ac_ratio, (int, float))
+                or self.dc_ac_ratio <= 0):
+            raise ValueError("dc_ac_ratio 必须为正数")# 20261109新增
         if (self.latitude is None) != (self.longitude is None):
             raise ValueError("latitude/longitude 须同时提供或同时缺省")
         if self.latitude is not None and not -90 <= self.latitude <= 90:

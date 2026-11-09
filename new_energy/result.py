@@ -31,6 +31,8 @@ class PowerResult:
     total_power_mw: np.ndarray              # 所配置单元出力合计（MW）
     total_power_pu: np.ndarray              # 所配置单元出力合计（pu）
     weighted_wind_speed_m_s: np.ndarray | None = None   # 容量加权平均风速（m/s，仅风电）
+    city_dni: dict[str, np.ndarray] | None = None # 20261109新增：光伏DNI
+    total_dni: np.ndarray | None = None # 20261109新增：光伏DNI
 
 
 @dataclass
