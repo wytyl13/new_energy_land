@@ -550,9 +550,7 @@ class Physics:
             case → DNI (W/m2, 8760, )，与组件倾角/方位角无关)。
         """
         temp_c = temp_clim - 273.15 # (8760, ) 摄氏温度
-        dc_capacity = unit.capacity_mw * unit.dc_ac_ratio # 20261109新增，交流侧额定容量 × 容配比 = 直流侧装机容量
         configured = sum(c.count * c.rated_power_mw for c in unit.components) # 标量 组件配置总装机
-        scale = dc_capacity / max(configured, 1e-9) # 标量 容量等比缩放系数# 20261109修改
 
         power: dict[str, np.ndarray] = {}
         dni_by_case = {}  # 20261109新增
@@ -564,6 +562,7 @@ class Physics:
                 g, dni = self._poa(ghi, unit.latitude, unit.longitude, comp.tilt_deg, comp.azimuth_deg) # (8760, )# 20261109修改新增dni
                 if case_dni is None: case_dni = dni.copy()# # 20261109修改新增dni DNI与组件倾角、方位角无关，每个地市每个年景保存一次
                 tc = temp_c + (comp.noct_c - 20) / 800 * g # (8760, ) 组件温度 °C
+                scale = unit.capacity_mw * comp.dc_ac_ratio / max(configured, 1e-9) # 标量 该组件容量等比缩放系数（交流份额×各自容配比÷全部组件额定合计）# 20261110改组件级容配比
                 city_mw += (
                     comp.count * comp.rated_power_mw * scale * self.loss_factor
                     * comp.efficiency

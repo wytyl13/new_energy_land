@@ -72,6 +72,14 @@ class Assignment:
         return sorted(set(self._t.loc[self._t["inside"], "unit"]))
 
 
+    def units_of_province(self, province: str) -> list[str]:
+        """省名 → 该省全部单元名（字典序）；省名不在归属表立即报错（结构查询接口用，P10.6）。"""
+        b = self._t[self._t["province"] == province]
+        if b.empty:
+            raise ValueError(f"province 不在归属表: {province}")
+        return sorted(set(b["unit"]))
+
+
     def coords(self, unit: str) -> list[tuple[float, float]]:
         """单元名 → 全部 inside 格点坐标列表（grids 据此取气象数据列）。"""
         b = self._t[self._t["inside"] & (self._t["unit"] == unit)]

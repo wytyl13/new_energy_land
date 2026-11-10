@@ -16,6 +16,7 @@
     3 默认值     缺 data_dir/city_configs 时填服务端默认；文件与 dict 解析等价
     4 非法请求   缺字段/未知字段/重复地市/坏类型/缺目录/越界地市/负容量/配置文件不存在 → 报错指明字段
     5 区域单元   单个未命中归属表的单元按传入数据全部格点列聚合；声明前缀不符报错
+    6 海风全流程 儋州（含海格点）+ sea_configs，cities 含 sea、末列 sea_power_mw、省=陆+海、与冻结基准一致
 """
 from __future__ import annotations
 
@@ -36,6 +37,7 @@ logging.disable(logging.INFO)
 TESTS = Path(__file__).resolve().parent
 FIXTURES = TESTS / "fixtures"
 BASELINE = TESTS.parent / ".refactor_baseline" / "BASE_正常资源年.csv"
+SEA_BASELINE = TESTS.parent / ".refactor_baseline" / "BASE_wind_sea_正常资源年.csv"
 CITY_COL = "460100_海口市_power_mw"
 
 results: list[tuple[str, str, float]] = []
@@ -252,6 +254,34 @@ def case_direct_unit() -> None:
         raise AssertionError("未抛错（期望前缀校验报错）")
 
 
+def case_sea_full_flow() -> None:
+    """海风全流程：儋州（含海格点）+ sea_configs，结构断言 + 与冻结基准容差一致。
+
+    Returns:
+        None
+    """
+    fixture = _load_fixture("wind_sea.json")
+    fixture["output_dir"] = str(TESTS / "output")
+    response = run("wind", fixture)
+    b = pd.read_csv(response["output_file"], encoding="utf-8-sig")
+    # 结构断言（D-57/D-58）：cities 末尾 sea、sea_power_mw 末列、总装机含海、省出力 = 陆 + 海
+    assert response["cities"] == ["460400_儋州市", "sea"], "cities 应为儋州 + sea"
+    assert b.columns[-1] == "sea_power_mw", "sea_power_mw 应为末列"
+    assert abs(response["total_capacity_mw"] - 57.15) <= 1e-6, "总装机应含海风 57.15"
+    land = b["460400_儋州市_power_mw"].to_numpy()
+    sea = b["sea_power_mw"].to_numpy()
+    assert np.allclose(b["province_power_mw"].to_numpy(), land + sea, rtol=1e-9, atol=1e-9), "省出力应=陆+海"
+    assert sea.min() >= 0 and sea.max() <= 20 + 1e-9, "海风出力应界内 [0, 20]"
+    # 数值回归：与冻结基准（P10.7 生成）总量 1e-6 / 逐元素 1e-4
+    a = pd.read_csv(SEA_BASELINE, encoding="utf-8-sig")
+    assert a.shape == b.shape == (8784, 6), f"规模不符: 基准{a.shape} vs 实际{b.shape}"
+    assert list(a.columns) == list(b.columns), "列集或列序不一致"
+    total_rel = abs(a["province_power_mw"].sum() - b["province_power_mw"].sum()) / a["province_power_mw"].sum()
+    assert total_rel <= 1e-6, f"总量相对偏差 {total_rel:.3e} 超过 1e-6"
+    rel = _rel_max(a, b)
+    assert rel <= 1e-4, f"逐元素最大相对偏差 {rel:.3e} 超过 1e-4"
+
+
 def main() -> None:
     """依次执行全部用例并打印结果表。
 
@@ -263,6 +293,7 @@ def main() -> None:
     _check("3 默认值与解析等价", case_defaults)
     _check("4 非法请求校验", case_invalid_requests)
     _check("5 区域单元聚合", case_direct_unit)
+    _check("6 海风全流程（儋州+sea，约30秒）", case_sea_full_flow)
 
     print(f"\n{'用例':<28}结果  耗时")
     print("-" * 56)

@@ -32,7 +32,7 @@
 | 辐照格点 CSV | (N, 8760, G_s) | W/m²，UTC | 光伏历史 |
 | 温度格点 CSV | (N, 8760, G_t) | K | 光伏读训练年（气候态） |
 | 归属表 | (C,) 表 | — | 单元 → 严格边界内格点坐标 |
-| 装机配置 | (C,) 表 | — | 单元 → capacity_mw + turbines[M] \| components[K] + dc_ac_ratio（光，D-59） |
+| 装机配置 | (C,) 表 | — | 单元 → capacity_mw + turbines[M] \| components[K]（光，组件各含 dc_ac_ratio，D-60） |
 
 维度总流转：
 
@@ -95,7 +95,7 @@
 
 - remap 到输出年 (T_out,)：闰年时间插值补 2/29，场景数值不变；风 = 重排后物理出力，光 = 轴年物理出力后重排（辐照随日历走，顺序不可换）
 - 风：切变 $v_{hub} = v \cdot (h/100)^{\alpha}$；温压 → 轮毂密度比 $\rho/\rho_0$；立方曲线 $\frac{v^3 - v_{in}^3}{v_r^3 - v_{in}^3}$；多机型 $\sum_m \mathrm{count}_m \cdot \mathrm{rated}_m \cdot \mathrm{scale}_m$ → ×loss_factor → 单元出力 (T_out,)
-- 光：GHI → DNI/DHI 分解（DNI = max(GHI−DHI, 0)/cos z，D-59）→ POA（直射+散射+地面反射）→ NOCT 组件温度 → $\frac{g}{1000}\left(1 + \gamma\,(t_c - 25)\right)$；多组件同式叠加（scale 基数 = 直流侧 capacity_mw×dc_ac_ratio）→ ×loss_factor → 交流侧封顶 [0, capacity_mw] → 单元出力 (T_out,)
+- 光：GHI → DNI/DHI 分解（DNI = max(GHI−DHI, 0)/cos z，D-59）→ POA（直射+散射+地面反射）→ NOCT 组件温度 → $\frac{g}{1000}\left(1 + \gamma\,(t_c - 25)\right)$；多组件同式叠加（组件 i 的 scale = capacity_mw×该组件 dc_ac_ratio ÷ 全部组件额定合计，D-60）→ ×loss_factor → 交流侧封顶 [0, capacity_mw] → 单元出力 (T_out,)
 - 单元求和 → 全省/区域表
 
 输出（CSV + JSON power_table 双份，同列同值；b=output_city_power∈{0,1}）：
@@ -174,7 +174,7 @@
 - 单元名匹配（D-29、D-53）：单元名键 = DataV 行政区划码_城市名（如 `460100_海口市`）。全部命中 → 格点由归属表给出；部分命中 → 未命中的跳过并告警（无格点单元，如东城区）；多单元全部未命中 → `ValueError`；单单元未命中 → 合法自定义区域，格点 = 传入数据中声明前缀的全部格点列均值聚合。
 - `variable_prefixes: {kind: 前缀}`（风电 wind/temperature/pressure，光伏 solar/temperature）：列匹配按经纬度数值键（保留 2 位小数）查表，命中列前缀须等于声明前缀（变量身份校验，防 10m/100m 风速混装），不符报错指明坐标与现有前缀；容 `19.0/19.00` 格式差。
 - 光伏单元 `latitude`/`longitude` 可选：命中单元缺省 = 归属表格点中心；未命中的单单元缺省 = 数据格点坐标均值（`GridData.center`）。
-- 逐层未知字段拒绝；`scenario.year` 整数、`resource_year_type` 枚举；机型/组件 `count` 正整数、`rated_power_mw`>0，`efficiency`/`wind_shear_exponent` 缺省 1.0/0.15，光伏 `dc_ac_ratio` 正数缺省 1.2（D-59，风电 `sea_configs` 见「海陆区分风电」节）；lat ∈ [-90,90]、lon ∈ [-180,180]；重复单元报错；`data_dir` 须含所需子目录（风电 wind/temperature/pressure，光伏 solar/temperature）。
+- 逐层未知字段拒绝；`scenario.year` 整数、`resource_year_type` 枚举；机型/组件 `count` 正整数、`rated_power_mw`>0，`efficiency`/`wind_shear_exponent` 缺省 1.0/0.15，光伏组件 `dc_ac_ratio` 正数缺省 1.2（D-60 组件级，风电 `sea_configs` 见「海陆区分风电」节）；lat ∈ [-90,90]、lon ∈ [-180,180]；重复单元报错；`data_dir` 须含所需子目录（风电 wind/temperature/pressure，光伏 solar/temperature）。
 - 容量口径：`capacity_mw` 为权威值，机组/组件 count×rated 合计等比缩放到它（出处：docs/ref/新能源出力_陆上.md「地市容量与机组容量的实际关系」）。
 - 计算范围只由 `city_configs` 键决定；校验失败一律 `ValueError` 指明字段/文件/单元（服务层映射 400）。
 
@@ -245,7 +245,7 @@
 
 变量（`new_energy/constants.py`，冻结）：`RHO_REF`=1.225 kg/m³、`GAMMA`=0.0065 K/m、`GRAVITY`=9.80665 m/s²、`R_D`=287.05 J/(kg·K)。
 
-规则：风 = 切变 (h/100)^α → 轮毂风速；温压 → 轮毂 ρ/ρ0；立方曲线 (v³−vin³)/(vr³−vin³)；×count×rated×scale×loss_factor；`Physics` 只算单城市，区域汇总（逐城市出力累加 + 容量加权风速，城市累加顺序冻结）在 `run_wind`。光 = GHI→DNI/DHI 分解（DHI = kd·GHI 晴空指数经验式，DNI = max(GHI−DHI, 0)/cos z——原部署源码为 DNI=GHI/cos z 全量直射、直射与散射项重复计入，D-59 纠偏）→POA（直射+散射+地面反射 albedo）→ NOCT 组件温度 → g/1000×(1+γ(tc−25))；×count×rated×scale×loss_factor，scale 基数 = 直流侧装机 capacity_mw×dc_ac_ratio；出力截 [0, capacity_mw]（交流侧封顶）；`Physics` 只算单单元（轴年）并返回逐 case DNI（与倾角无关，每单元每景一份），区域汇总（逐单元出力累加、DNI 算术平均，顺序冻结）与重排输出年在 `run_solar`。输出年 remap：闰年时间插值补 2/29，场景数值不变。
+规则：风 = 切变 (h/100)^α → 轮毂风速；温压 → 轮毂 ρ/ρ0；立方曲线 (v³−vin³)/(vr³−vin³)；×count×rated×scale×loss_factor；`Physics` 只算单城市，区域汇总（逐城市出力累加 + 容量加权风速，城市累加顺序冻结）在 `run_wind`。光 = GHI→DNI/DHI 分解（DHI = kd·GHI 晴空指数经验式，DNI = max(GHI−DHI, 0)/cos z——原部署源码为 DNI=GHI/cos z 全量直射、直射与散射项重复计入，D-59 纠偏）→POA（直射+散射+地面反射 albedo）→ NOCT 组件温度 → g/1000×(1+γ(tc−25))；×count×rated×scale×loss_factor，组件 i 的 scale = capacity_mw×该组件 dc_ac_ratio÷全部组件额定合计（D-60 组件级）；出力截 [0, capacity_mw]（交流侧封顶）；`Physics` 只算单单元（轴年）并返回逐 case DNI（与倾角无关，每单元每景一份），区域汇总（逐单元出力累加、DNI 算术平均，顺序冻结）与重排输出年在 `run_solar`。输出年 remap：闰年时间插值补 2/29，场景数值不变。
 
 输入：场景序列、输出年温压（风）、装机配置
 输出：`PowerResult`（各单元出力、全省/区域汇总、容量加权风速）

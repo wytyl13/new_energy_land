@@ -21,6 +21,7 @@
           "azimuth_deg": 180.0,
           "noct_c": 45.0,
           "gamma_p_per_c": -0.004,
+          "dc_ac_ratio": 1.2,
           "efficiency": 1.0
         },
         {
@@ -31,6 +32,7 @@
           "azimuth_deg": 180.0,
           "noct_c": 42.0,
           "gamma_p_per_c": -0.0035,
+          "dc_ac_ratio": 1.2,
           "efficiency": 1.0
         }
       ]

@@ -4,7 +4,7 @@ __pycache__/
 .ipynb_checkpoints/
 *.py[cod]
 .refactor_baseline/
-
+output/
 data/*
 !data/全国格点地市归属.csv
 !data/biz/

@@ -1,9 +1,9 @@
 # 计划与进度
 
 ## 当前状态
-- 正在做：P11 光伏算法同步（已完成，待用户核对）；P10 剩 P10.5~P10.7
+- 正在做：P10 全部完成（P10.6/P10.7 待用户核对）；P12 待核对
 - 挂起：提交 P6.2~P6.5（P6.4 已完成）
-- 下一步：P10.6；evaluate=true fixture 覆盖缺口
+- 下一步：evaluate=true fixture 覆盖缺口
 - 阻塞：无
 
 ## 待决定
@@ -43,9 +43,10 @@
 | P10.3 | request/schema 解析平级键 sea_configs（D-57：单对象 region/capacity_mw/turbines；有海缺配/无海却配报错；两者都缺省才填默认海风 default_sea_config_wind.json）+ Runner 海风配置核对 + 单元测试 | 已完成 | test_runner 5/5（新增 test_sea_configs 六断言）、test_schema 3/3；风自测 5/5（默认请求填默认海风后用例 3 通过）、光自测 4/4 PASS（schema 共用层无影响）；模型侧未消费 sea_configs（P10.4 接线） |
 | P10.4 | Runner：reader._wind 切 sea_split=True + 海风独立任务键 sea 进并行池（city_configs 补 sea 键，温压同组），省汇总含海；export 总装机含海 + 文件名 onshore_wind_power→wind_power（D-58，算法包零改动——run_wind 按机组表通用汇总） | 已完成 | test_export 3/3、test_runner 5/5、test_grids 4/4；风自测 5/5（海口纯陆路径冻结基准逐字一致）；一次性儋州+海全流程：sea_power_mw 末位列/cities 含 sea/总装机 57.15=37.15+20/省出力=陆+海逐元素一致/海列界内（年总量 58503 MWh，容量因子 33%）；光自测 4/4 PASS（export 共用层无影响） |
 | P10.5 | 文档同步（D-57/D-58/D-59 落 API.md；DESIGN 已随各步同步） | 已完成 | API.md 七处：标题海陆风电、风电节海陆拆分描述、传参加 sea_configs（含默认/报错规则）、返回改 wind_power_ 文件名 + cities/总装机/sea_power_mw 列注释、光伏节 DNI/容配比描述、传参加 dc_ac_ratio、返回加 DNI 列；列名/文件名/默认值逐项对 export.py、config.py 核对 |
-| P10.6 | 结构查询接口（单元名列表 → 每单元 land_grid_count/sea_grid_count，前端据此定城市/海风配置）+ API.md 登记 | 待开始 | — |
-| P10.7 | 风自测基准按新陆风口径重生成冻结 + 新增 sea_configs 用例；光伏回归 | 待开始 | — |
+| P10.6 | 结构查询接口（省名 → 前端要填的配置结构，D-61）：Assignment 增 units_of_province + biz/structure.py + wind/solar 路由各加 GET /structure + API.md 登记 | 已完成 | tests/biz/test_structure 3/3 PASS（海口 4陆0海/儋州 4陆1海/光伏全单元无 sea 键）；实调海南：风电 18 城市 + sea_configs{needed,grid_count 6} + 纯海名单[三沙]、光伏 19 单元；坏省名报错 400 口径；路由注册与 main_server 装配冒烟通过；青海省湖点计海（6 点）与 D-55/runner 一致 |
+| P10.7 | 风自测海风用例 + 冻结海风基准 + 光伏回归（陆风基准不重生成——P10.4 已验证现基准与当前代码逐字一致，重生成无信息量） | 已完成 | wind_sea 用例 6 PASS（40.8s：cities 含 sea/末列 sea_power_mw/总装机 57.15/省=陆+海逐元素/海列界内/对基准 1e-6·1e-4）；新基准 BASE_wind_sea_正常资源年.csv 冻结（8784×6，sea 年总量 58503.1 MWh 与 P10.4 一次性验证一致）；风自测 6/6 PASS；solar_danzhou.json 恢复统一 1.2（用户试验值 1.8 撤销）后光伏 4/4 PASS |
 | P11 | 光伏算法同步（同事 solar_update/ 四文件，D-59）：POA 分解式 DNI=max(GHI−DHI,0)/cos z、直流侧缩放 capacity_mw×dc_ac_ratio、交流封顶 [0,capacity_mw]、DNI 输出列 + 请求可选字段 dc_ac_ratio（默认 1.2）；光伏基准重生成 | 已完成 | config/result 按同事版抄、solar.py 整文件替换（同源基底）+补 Physics/_poa Returns docstring、export 仅合 DNI 两段（保 P10.4 风电改动）；基准重生成：场景 3 文件逐字节不变（证实仅物理出力层变）、power 3 文件更新+md5；光自测 4/4（新基准偏差 0）、test_export 3/3、风自测 5/5 PASS；DNI 列暂无基准回归覆盖（可扩展）；solar_update/ 目录保留未删 |
+| P12 | dc_ac_ratio 改组件级（D-60，Q-04 终结；同事 new_update/ 核对=与 P11 已同步内容同批，无需再同步）：字段 SolarUnit→SolarComponent、solar.py 缩放改组件循环内（scale=capacity_mw×该组件容配比÷全部组件额定合计）、API.md/DESIGN 四处同步 | 已完成 | 光自测 4/4（默认 1.2 逐组件与单元级逐位一致，冻结基准不变）；test_schema 3/3、test_runner PASS；层级检查（组件级可传/0 报错/单元级旧位置 TypeError）；一次性 1.2/1.3 运行 53.8s 成功，年总量 +488 MWh（+0.024%），交流封顶 955.21 生效 |
 
 ## 待办
 （无）

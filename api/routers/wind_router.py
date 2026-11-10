@@ -5,7 +5,7 @@
 @Author  : weiyutao
 @File    : wind_router.py
 
-风电路由：POST /api/wind/run，同步执行，透传统一 JSON 给业务层唯一入口。
+风电路由：POST /api/wind/run + GET /api/wind/structure，透传统一 JSON / 查询参数给业务层。
 
 请求体不走 Pydantic 模型：校验与默认值填充是业务层入口的职责
 （skill `build-fastapi-service` 的透传例外），服务层不重复校验。
@@ -14,13 +14,14 @@ from __future__ import annotations
 
 import asyncio
 
-from fastapi import APIRouter, Body
+from fastapi import APIRouter, Body, Query
 
 from api.response import make_response
 from biz.runner import run
+from biz.structure import structure
 
 # ─────────────────────────────────────────────────────────────────────────────
-# 风电路由（POST /api/wind/run）
+# 风电路由（POST /api/wind/run + GET /api/wind/structure）
 # ─────────────────────────────────────────────────────────────────────────────
 
 router = APIRouter(prefix="/api/wind", tags=["Wind"])
@@ -34,3 +35,10 @@ async def run_wind_scenario(
 """
     result = await asyncio.to_thread(run, "wind", payload)
     return make_response(success=True, data=result)
+
+
+@router.get("/structure")
+async def wind_structure(province: str = Query(..., description="归属表省名，如 海南省")) -> dict:
+    """【风电结构查询】省名 → 要填的城市配置（陆格点单元）+ 海风结构（P10.6）；纯海单元名单另给。
+"""
+    return make_response(success=True, data=structure("wind", province))
