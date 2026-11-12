@@ -60,6 +60,8 @@ async def log_requests(request: Request, call_next):
     start = time.perf_counter()
     response = await call_next(request)
     elapsed = time.perf_counter() - start
+    if request.query_params:  # 带 query string 的请求（如 /structure?province=海南省），参数随行记出
+        logger.info("%s %s 参数: %s", request.method, request.url.path, dict(request.query_params))
     logger.info("%s %s -> %s (%.1fs)", request.method, request.url.path, response.status_code, elapsed)
     return response
 

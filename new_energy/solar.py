@@ -39,6 +39,10 @@ from .utils.time_axis import MONTH_STARTS, month_of, no_feb29, remap_to_year, ye
 
 logger = logging.getLogger(__name__)
 
+# DNI分解约束：与独立DNI场景计算程序保持一致
+DNI_MIN_SOLAR_ELEVATION_DEG = 10.0  # 低于该太阳高度角时，DNI置零
+DNI_MAX_TOA_RATIO = 1.0             # DNI不超过大气外法向辐照度
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 模块级函数（温度气候态 / 理想辐照度）
@@ -580,45 +584,131 @@ class Physics:
         tilt_deg: float,
         azimuth_deg: float,
     ) -> tuple[np.ndarray, np.ndarray]:
-        # 20261109修改新增↑
-        """水平面辐照度 → 组件倾斜面辐照度（POA）：直射 + 散射 + 地面反照。
+        """水平面GHI → 组件倾斜面POA，并按Erbs小时模型分解DHI/DNI。
 
-        Args:
-            ghi (np.ndarray): 水平面辐照度 (8760, )（W/m2）。
-            latitude (float): 纬度（度）。
-            longitude (float): 经度（度）。
-            tilt_deg (float): 组件倾角（度）。
-            azimuth_deg (float): 组件方位角（度）。
+        DNI处理与独立DNI场景计算程序保持一致：
+        1. 以北京时间小时中点计算太阳位置；
+        2. 由GHI与大气层外水平辐照度计算Erbs模型内部Kt；
+        3. 按Erbs小时模型计算散射比例Kd；
+        4. 太阳高度角低于阈值时DNI置零；
+        5. DNI不超过大气层外法向辐照度；
+        6. 根据最终DNI反算DHI，使GHI = DHI + DNI*cos(天顶角)闭合。
 
         Returns:
-            tuple[np.ndarray, np.ndarray]: (倾斜面辐照度 (8760, )（W/m2，非负）,
-            法面直接辐射 DNI (8760, )（W/m2）)。
+            tuple[np.ndarray, np.ndarray]:
+                (倾斜面辐照度POA (W/m2), 最终DNI (W/m2))。
         """
-        n = self.target_index.dayofyear.to_numpy()
-        h = self.target_index.hour.to_numpy() + self.target_index.minute.to_numpy() / 60
-        dec = np.deg2rad(23.45 * np.sin(np.deg2rad(360 * (284 + n) / 365))) # 太阳赤纬
-        ha = np.deg2rad(15 * (h - 12 + (120 - longitude) / 15)) # 时角（北京时间 → 当地太阳时）
-        la = np.deg2rad(latitude)
-        cz = np.clip(np.sin(la) * np.sin(dec) + np.cos(la) * np.cos(dec) * np.cos(ha), 0, 1) # 太阳高度角余弦
-        z = np.arccos(cz) # 天顶角
+        ghi = np.maximum(np.nan_to_num(np.asarray(ghi, dtype=float), nan=0.0), 0.0)
+
+        # 步骤1：北京时间小时中点 → UTC，计算太阳位置
+        local_time = pd.DatetimeIndex(self.target_index) + pd.Timedelta(minutes=30)
+        utc_time = local_time - pd.Timedelta(hours=8)
+        day = utc_time.dayofyear.to_numpy(dtype=float)
+        hour = (
+            utc_time.hour.to_numpy(dtype=float)
+            + utc_time.minute.to_numpy(dtype=float) / 60.0
+            + utc_time.second.to_numpy(dtype=float) / 3600.0
+        )
+
+        # NOAA近似太阳位置算法：时间方程、太阳赤纬、时角
+        gamma = 2.0 * np.pi / 365.0 * (day - 1.0 + (hour - 12.0) / 24.0)
+        equation_minutes = 229.18 * (
+            0.000075
+            + 0.001868 * np.cos(gamma)
+            - 0.032077 * np.sin(gamma)
+            - 0.014615 * np.cos(2.0 * gamma)
+            - 0.040849 * np.sin(2.0 * gamma)
+        )
+        declination = (
+            0.006918
+            - 0.399912 * np.cos(gamma)
+            + 0.070257 * np.sin(gamma)
+            - 0.006758 * np.cos(2.0 * gamma)
+            + 0.000907 * np.sin(2.0 * gamma)
+            - 0.002697 * np.cos(3.0 * gamma)
+            + 0.00148 * np.sin(3.0 * gamma)
+        )
+
+        utc_minutes = hour * 60.0
+        solar_minutes = (utc_minutes + equation_minutes + 4.0 * float(longitude)) % 1440.0
+        hour_angle = np.deg2rad(solar_minutes / 4.0 - 180.0)
+
+        latitude_rad = np.deg2rad(float(latitude))
+        cos_zenith = (
+            np.sin(latitude_rad) * np.sin(declination)
+            + np.cos(latitude_rad) * np.cos(declination) * np.cos(hour_angle)
+        )
+        cos_zenith = np.clip(cos_zenith, -1.0, 1.0)
+        solar_elevation = np.rad2deg(np.arcsin(cos_zenith))
+
+        # 步骤2：大气层外法向/水平辐照度，以及Erbs内部Kt
+        g_on = 1367.0 * (1.0 + 0.033 * np.cos(2.0 * np.pi * day / 365.0))
+        g0h = np.maximum(g_on * cos_zenith, 0.0)
+        kt = np.divide(
+            ghi,
+            g0h,
+            out=np.zeros_like(ghi),
+            where=g0h > 1e-6,
+        )
+
+        # 步骤3：Erbs小时模型计算散射比例Kd
+        kd = np.empty_like(kt)
+        low = kt <= 0.22
+        middle = (kt > 0.22) & (kt <= 0.80)
+        high = kt > 0.80
+
+        kd[low] = 1.0 - 0.09 * kt[low]
+        k = kt[middle]
+        kd[middle] = (
+            0.9511
+            - 0.1604 * k
+            + 4.388 * k**2
+            - 16.638 * k**3
+            + 12.336 * k**4
+        )
+        kd[high] = 0.165
+        kd = np.clip(kd, 0.0, 1.0)
+
+        dhi_erbs = kd * ghi
+        direct_horizontal = np.maximum(ghi - dhi_erbs, 0.0)
+
+        # 步骤4：先计算原始DNI，再按太阳高度角过滤
+        dni_raw = np.divide(
+            direct_horizontal,
+            cos_zenith,
+            out=np.zeros_like(ghi),
+            where=cos_zenith > 0.0,
+        )
+        dni_raw = np.maximum(dni_raw, 0.0)
+
+        valid_dni = (
+            (solar_elevation >= DNI_MIN_SOLAR_ELEVATION_DEG)
+            & (cos_zenith > 0.0)
+            & (ghi > 0.0)
+        )
+        dni_before_cap = np.where(valid_dni, dni_raw, 0.0)
+
+        # 步骤5：DNI不超过大气层外法向辐照度
+        dni = np.minimum(dni_before_cap, g_on * DNI_MAX_TOA_RATIO)
+
+        # 步骤6：按最终DNI反算DHI，保证水平面辐照度分解闭合
+        dhi = np.maximum(ghi - dni * np.maximum(cos_zenith, 0.0), 0.0)
+
+        # 步骤7：直射 + 散射 + 地面反照，合成组件倾斜面辐照度POA
+        z = np.arccos(np.clip(cos_zenith, 0.0, 1.0))
         beta = np.deg2rad(tilt_deg)
         az = np.deg2rad(azimuth_deg)
-        # 1. 直射分量：GHI ÷ 高度角余弦（低角度截 0.02 防放大）
-        safe = np.maximum(cz, 0.02)
-
-        # 2. 散射分量：晴空指数经验式估计散射比例
-        kd = np.where(ghi > 20, np.clip(1 - 1.13 * np.clip(ghi / (1367 * safe), 0, 1), 0.05, 1), 1)
-        dhi = kd * ghi
-        dni = np.divide(np.maximum(ghi - dhi, 0.0),safe,out=np.zeros_like(ghi),where=cz > 0)
-        # 3. 入射角 + 直射/散射/反照三分量合成
-        ci = np.cos(z) * np.cos(beta) + np.sin(z) * np.sin(beta) * np.cos(az - np.pi)
+        ci = (
+            np.cos(z) * np.cos(beta)
+            + np.sin(z) * np.sin(beta) * np.cos(az - np.pi)
+        )
         poa = np.maximum(
-            0,
-            dni * np.maximum(ci, 0)
-            + dhi * (1 + np.cos(beta)) / 2
-            + self.albedo * ghi * (1 - np.cos(beta)) / 2,
-        )# 20261109修改 新增dni输出
-        return poa, dni# 20261109修改 新增dni输出
+            0.0,
+            dni * np.maximum(ci, 0.0)
+            + dhi * (1.0 + np.cos(beta)) / 2.0
+            + self.albedo * ghi * (1.0 - np.cos(beta)) / 2.0,
+        )
+        return poa, dni
 
 
 

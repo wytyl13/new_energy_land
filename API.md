@@ -139,7 +139,7 @@
 }
 ```
 
-## 结构查询 GET /api/{wind,solar}/structure
+## 结构查询 GET /api/structure
 
 前端选定省份后先调此接口，拿到该省要填写的配置结构，再渲染表单发计算请求（P10.6）。只读归属表，秒级返回。`province` 为 query 参数，取归属表 province 列的省名（如 `海南省`），不在表内报 400。
 

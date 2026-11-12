@@ -13,12 +13,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from fastapi import APIRouter, Body, Query
 
 from api.response import make_response
 from biz.runner import run
 from biz.structure import structure
+
+logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 风电路由（POST /api/wind/run + GET /api/wind/structure）
@@ -33,6 +36,7 @@ async def run_wind_scenario(
 ) -> dict:
     """【风电出力场景计算】同步阻塞：单市几十秒、全省约 4 分钟；成功返回结果 JSON（含 power_table）。
 """
+    logger.info("wind/run 请求参数: %s", payload)
     result = await asyncio.to_thread(run, "wind", payload)
     return make_response(success=True, data=result)
 

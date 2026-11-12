@@ -13,12 +13,15 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 
 from fastapi import APIRouter, Body, Query
 
 from api.response import make_response
 from biz.runner import run
 from biz.structure import structure
+
+logger = logging.getLogger(__name__)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # 光电路由（POST /api/solar/run + GET /api/solar/structure）
@@ -33,6 +36,7 @@ async def run_solar_scenario(
 ) -> dict:
     """【光伏出力场景计算】同步阻塞，默认儋州单区域约 30 秒；成功返回结果 JSON（含 power_table）。
 """
+    logger.info("solar/run 请求参数: %s", payload)
     result = await asyncio.to_thread(run, "solar", payload)
     return make_response(success=True, data=result)
 
